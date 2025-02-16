@@ -116,7 +116,7 @@ public final class CoreLocationKit: NSObject {
         .init(nil)
     }()
     
-    private override init() {
+    public override init() {
         super.init()
         // 設定定位管理器的參數並開始定位。
         self.locationManager.desiredAccuracy = kCLLocationAccuracyBest
