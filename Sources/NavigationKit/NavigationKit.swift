@@ -23,7 +23,8 @@ public final class CoreLocationKit: NSObject {
         /// 沒有找到對應的地址。
         case noAddressFound
     }
-    
+    ///單例
+    public static let shared: CoreLocationKit = .init()
     
     /// 定位座標的發布者。
     public var locationPublisher: AnyPublisher<CLLocation?, Never> {
