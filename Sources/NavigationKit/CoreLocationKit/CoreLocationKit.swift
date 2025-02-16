@@ -2,7 +2,7 @@
 // https://docs.swift.org/swift-book
 
 //
-//  LocationRepository.swift
+//  CoreLocationKit.swift
 //  Traveller
 //
 //  Created by Mille Yin on 2024/11/30.
