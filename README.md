@@ -169,11 +169,4 @@ appleMap.customAnnotationImage = UIImage(named: "customPin")
 
 ---
 
-## 🎯 结论
-
-✅ **`CoreLocationKit`** 负责 **定位、指南针、地址解析**。  
-✅ **`AppleMapKit`** 负责 **地图显示、标注、导航路线**。  
-✅ **`AppleMapKit`** 可用于 **UIKit 和 SwiftUI**，灵活集成到 App 中。  
-✅ **API 设计简洁清晰**，可以轻松扩展更多功能。
-
-🔥 **如果你需要更多改进或扩展，告诉我，我可以帮你优化！😎**
+## 🏃后续功能在路上....
