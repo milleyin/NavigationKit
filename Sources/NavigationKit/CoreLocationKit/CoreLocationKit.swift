@@ -14,147 +14,139 @@ import Combine
 
 public final class CoreLocationKit: NSObject {
     
-    /// 自訂錯誤類型。
+    /// 自定义错误类型
     public enum LocationError: Swift.Error {
-        /// 當前位置不可用。
+        /// 当前位置信息不可用
         case locationUnavailable
-        /// 反向地理編碼失敗。
+        /// 反向地理编码失败
         case geoEncodingFailed(Swift.Error)
-        /// 沒有找到對應的地址。
+        /// 没有找到匹配的地址
         case noAddressFound
     }
-    ///單例
-    public static let shared: CoreLocationKit = .init()
     
-    /// 定位座標的發布者。
+    /// 单例
+    public static let shared = CoreLocationKit()
+    
+    /// 位置发布者
     public var locationPublisher: AnyPublisher<CLLocation?, Never> {
-        self.locationSubject.eraseToAnyPublisher()
+        locationSubject.eraseToAnyPublisher()
     }
     
-    /// 當前的定位座標。
+    /// 当前定位
     public var currentLocation: CLLocation? {
-        self.locationSubject.value
+        locationSubject.value
     }
     
-    /// 授權狀態的發布者。
+    /// 授权状态发布者
     public var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus?, Never> {
-        self.authorizationStatusSubject.eraseToAnyPublisher()
+        authorizationStatusSubject.eraseToAnyPublisher()
     }
     
-    /// 當前的授權狀態。
+    /// 当前授权状态
     public var currentAuthorizationStatus: CLAuthorizationStatus? {
-        self.authorizationStatusSubject.value
+        authorizationStatusSubject.value
     }
     
-    /// 方向的發布者。
+    /// 方向数据发布者
     public var headingPublisher: AnyPublisher<CLHeading?, Never> {
-        self.headingSubject.eraseToAnyPublisher()
+        headingSubject.eraseToAnyPublisher()
     }
     
-    /// 當前的方向。
+    /// 当前方向数据
     public var currentHeading: CLHeading? {
-        self.headingSubject.value
+        headingSubject.value
     }
     
-    /// 定位錯誤的發布者。
-    public var errorPublisher: Swift.Error? {
-        self.errorSubject.value
+    /// 位置错误发布者
+    public var errorPublisher: AnyPublisher<Swift.Error?, Never> {
+        errorSubject.eraseToAnyPublisher()
     }
     
-    /// 反向地理編碼(取得地址)的發布者。
+    /// 反向地理编码（获取地址）发布者
     public var addressPublisher: AnyPublisher<String, Swift.Error> {
-        
-        // 確認當前位置是否存在。
-        guard let location = self.currentLocation else {
+        guard let location = currentLocation else {
             return Fail(error: LocationError.locationUnavailable).eraseToAnyPublisher()
         }
         
-        // 進行反向地理編碼。
         return Future { promise in
-            let geoEncoder: CLGeocoder = .init()
-            geoEncoder.reverseGeocodeLocation(location) { placemarks, error in
-                if let error: Swift.Error {
-                    // 如果發生錯誤，則返回錯誤。
+            let geoCoder = CLGeocoder()
+            geoCoder.reverseGeocodeLocation(location) { placemarks, error in
+                if let error {
                     promise(.failure(LocationError.geoEncodingFailed(error)))
-                } else if let placemark: CLPlacemark = placemarks?.first {
-                    // 如果找到地標，組合地址字符串並返回。
-                    let address: String = [
+                } else if let placemark = placemarks?.first {
+                    let address = [
                         placemark.thoroughfare,
                         placemark.subThoroughfare,
                         placemark.locality,
                         placemark.administrativeArea,
                         placemark.postalCode,
-                        placemark.country].compactMap { $0 }.joined(separator: ", ")
+                        placemark.country
+                    ].compactMap { $0 }.joined(separator: ", ")
                     promise(.success(address))
                 } else {
-                    // 如果沒有找到地標，則返回錯誤。
                     promise(.failure(LocationError.noAddressFound))
                 }
             }
-        }.eraseToAnyPublisher()
+        }
+        .eraseToAnyPublisher()
     }
     
-    /// CLLocationManager 的實例，用於管理定位服務。
-    private let locationManager: CLLocationManager = .init()
-    
-    /// 定位座標的訂閱對象。
-    lazy private var locationSubject: CurrentValueSubject<CLLocation?, Never> = {
-        .init(nil)
+    /// CLLocationManager 实例（管理定位服务）
+    private let locationManager: CLLocationManager = {
+        let manager = CLLocationManager()
+        manager.desiredAccuracy = kCLLocationAccuracyBest
+        manager.distanceFilter = 35
+        return manager
     }()
     
-    /// 授權狀態的訂閱對象。
-    lazy private var authorizationStatusSubject: CurrentValueSubject<CLAuthorizationStatus?, Never> = {
-        .init(nil)
-    }()
+    /// 位置订阅对象
+    private let locationSubject = CurrentValueSubject<CLLocation?, Never>(nil)
     
-    /// 方向的訂閱對象。
-    lazy private var headingSubject: CurrentValueSubject<CLHeading?, Never> = {
-        .init(nil)
-    }()
+    /// 授权状态订阅对象
+    private let authorizationStatusSubject = CurrentValueSubject<CLAuthorizationStatus?, Never>(nil)
     
-    /// 定位錯誤的訂閱對象。
-    lazy private var errorSubject: CurrentValueSubject<Swift.Error?, Never> = {
-        .init(nil)
-    }()
+    /// 方向订阅对象
+    private let headingSubject = CurrentValueSubject<CLHeading?, Never>(nil)
     
+    /// 错误信息订阅对象
+    private let errorSubject = CurrentValueSubject<Swift.Error?, Never>(nil)
+    
+    /// 初始化方法
     public override init() {
         super.init()
-        // 設定定位管理器的參數並開始定位。
-        self.locationManager.desiredAccuracy = kCLLocationAccuracyBest
-        self.locationManager.distanceFilter = 35
-        self.locationManager.requestWhenInUseAuthorization()
-        self.locationManager.startUpdatingLocation()
-        self.locationManager.startUpdatingHeading()
-        self.locationManager.delegate = self
+        locationManager.delegate = self
+        locationManager.requestWhenInUseAuthorization()
+        locationManager.startUpdatingLocation()
+        locationManager.startUpdatingHeading()
     }
     
     /**
-     設定是否允許背景位置更新
-
-     - parameter allowed: 是否允許背景位置更新
+     设置是否允许后台位置更新
+     
+     - parameter allowed: 是否允许后台定位
      */
     public func allowBackgroundLocationUpdates(_ allowed: Bool) {
-        self.locationManager.allowsBackgroundLocationUpdates = allowed
+        locationManager.allowsBackgroundLocationUpdates = allowed
     }
 }
 
-// MARK: - CLLocationManager Protocol
+// MARK: - CLLocationManagerDelegate
 
 extension CoreLocationKit: CLLocationManagerDelegate {
     
     public func locationManager(_ manager: CLLocationManager, didFailWithError error: Swift.Error) {
-        self.errorSubject.send(error)
+        errorSubject.send(error)
     }
     
     public func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
-        self.authorizationStatusSubject.send(status)
+        authorizationStatusSubject.send(status)
     }
     
     public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        self.locationSubject.send(locations.last)
+        locationSubject.send(locations.last)
     }
     
     public func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
-        self.headingSubject.send(newHeading)
+        headingSubject.send(newHeading)
     }
 }

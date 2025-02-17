@@ -5,32 +5,32 @@ import PackageDescription
 
 let package = Package(
     name: "NavigationKit",
-    platforms: [.iOS(.v13)],
+    platforms: [.iOS(.v13), .macOS(.v11)],
     products: [
         .library(
             name: "NavigationKit",
-            targets: ["NavigationKit"]  // 这是最终的库目标
+            targets: ["NavigationKit"]
         ),
     ],
     dependencies: [],
     targets: [
-        // 这里定义了 NavigationKit 模块，包括它的子模块
         .target(
             name: "NavigationKit",
-            dependencies: ["CoreLocationKit", "AppleMapKit"],  // 引入子模块
-            path: "Sources/NavigationKit"
+            dependencies: ["CoreLocationKit", "AppleMapKit"],
+            path: "Sources/NavigationKit",
+            sources: ["NavigationKit.swift"]
         ),
         
-        // 子模块 CoreLocationKit
+        // CoreLocationKit 模块
         .target(
             name: "CoreLocationKit",
             dependencies: [],
             path: "Sources/NavigationKit/CoreLocationKit"
         ),
         
-        // 子模块 MapKit
+        // AppleMapKit 模块
         .target(
-            name: "MapKit",
+            name: "AppleMapKit",
             dependencies: [],
             path: "Sources/NavigationKit/AppleMapKit"
         ),
