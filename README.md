@@ -169,8 +169,5 @@ appleMap.customAnnotationImage = UIImage(named: "customPin")
 #endif
 ```
 
----
-
-## 🏃后续功能计划
--[] RouteKit / 线路记录 / 本地存储
-
+## 🏃后续功能
+- [ ] RouteKit
