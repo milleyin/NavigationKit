@@ -28,6 +28,9 @@ public final class AppleMapKit: NSObject, MKMapViewDelegate {
     public var customAnnotationImage: UIImage?
     #endif
     
+    /// 允许外部（SwiftUI 的 Coordinator）接管代理
+    public weak var externalDelegate: MKMapViewDelegate?
+    
     /// 初始化 `AppleMapKit`
     public init(userTrackingMode: MKUserTrackingMode = .follow) {
         self.mapView = MKMapView()
@@ -110,6 +113,11 @@ extension AppleMapKit {
     
     /// 处理标记的自定义视图
     public func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+        
+        // 如果 externalDelegate 存在，则先调用 externalDelegate 的方法
+        if let delegateView = externalDelegate?.mapView?(mapView, viewFor: annotation) {
+            return delegateView
+        }
         guard !(annotation is MKUserLocation) else { return nil }
         
         let identifier = "CustomAnnotation"
@@ -122,28 +130,34 @@ extension AppleMapKit {
             annotationView?.annotation = annotation
         }
         
-        #if canImport(UIKit)
+#if canImport(UIKit)
         if let image = customAnnotationImage {
             annotationView?.image = resizeImage(image: image, targetSize: CGSize(width: 21, height: 31))
         }
-        #endif
+#endif
         
         return annotationView
     }
     
     /// 处理导航线条的渲染
     public func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+        
+        // 先检查 externalDelegate 是否实现了该方法
+        if let renderer = externalDelegate?.mapView?(mapView, rendererFor: overlay) {
+            return renderer
+        }
+        
         guard let polyline = overlay as? MKPolyline else {
             return MKOverlayRenderer(overlay: overlay)
         }
         
         let renderer = MKPolylineRenderer(polyline: polyline)
         
-        #if canImport(UIKit)
+#if canImport(UIKit)
         renderer.strokeColor = UIColor.systemBlue
-        #else
+#else
         renderer.strokeColor = NSColor.systemBlue
-        #endif
+#endif
         
         renderer.lineWidth = 8
         renderer.lineCap = .round
