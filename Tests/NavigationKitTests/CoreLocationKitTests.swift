@@ -6,19 +6,18 @@
 //
 
 import XCTest
-import NavigationKit
+import CoreLocationKit
 import CoreLocation
 import Combine
 
 final class CoreLocationKitTests: XCTestCase {
     
-    var locationKit = CoreLocationKit()
+    let locationKit = CoreLocationKit.shared
     
     var cancellables: Set<AnyCancellable> = []
     
     override func setUp() {
         super.setUp()
-        locationKit = CoreLocationKit()
     }
     
     func testLocationPublisher() {
