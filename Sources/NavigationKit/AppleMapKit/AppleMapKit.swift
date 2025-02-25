@@ -24,9 +24,9 @@ public final class AppleMapKit: NSObject, MKMapViewDelegate {
     }
     
     /// 自定义标记图像（仅 iOS 可用）
-    #if canImport(UIKit)
+#if canImport(UIKit)
     public var customAnnotationImage: UIImage?
-    #endif
+#endif
     
     /// 允许外部（SwiftUI 的 Coordinator）接管代理
     public weak var externalDelegate: MKMapViewDelegate?
@@ -35,7 +35,7 @@ public final class AppleMapKit: NSObject, MKMapViewDelegate {
     public init(userTrackingMode: MKUserTrackingMode = .follow) {
         self.mapView = MKMapView()
         self.userTrackingMode = userTrackingMode
-
+        
         super.init()
         
         mapView.delegate = self  // ✅ 直接用 self 作为 delegate
@@ -95,15 +95,39 @@ public final class AppleMapKit: NSObject, MKMapViewDelegate {
                 
                 let routeRect = route.polyline.boundingMapRect
                 
-                #if canImport(UIKit)
+#if canImport(UIKit)
                 let edgePadding = UIEdgeInsets(top: 100, left: 50, bottom: 350, right: 50)
-                #else
+#else
                 let edgePadding = NSEdgeInsets(top: 100, left: 50, bottom: 350, right: 50)
-                #endif
+#endif
                 
                 self.mapView.setVisibleMapRect(routeRect, edgePadding: edgePadding, animated: true)
             }
         }
+    }
+    /**
+     跳转 Apple Maps App 开始导航
+     
+     - parameter start: 可选的起点坐标，默认为当前定位
+     - parameter destination: 终点坐标
+     - parameter destinationName: 终点名称
+     - Warning: 确保设备已安装 Apple Maps。
+     */
+    public func openInAppleMaps(start: CLLocationCoordinate2D?, destination: CLLocationCoordinate2D, destinationName: String) {
+        let startItem: MKMapItem
+        if let start = start {
+            let startPlacemark = MKPlacemark(coordinate: start)
+            startItem = MKMapItem(placemark: startPlacemark)
+            startItem.name = "当前位置"
+        } else {
+            startItem = MKMapItem.forCurrentLocation()
+        }
+        let destinationPlacemark = MKPlacemark(coordinate: destination)
+        let destinationItem = MKMapItem(placemark: destinationPlacemark)
+        destinationItem.name = destinationName
+        
+        let options = [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving]
+        MKMapItem.openMaps(with: [startItem, destinationItem], launchOptions: options)
     }
 }
 
