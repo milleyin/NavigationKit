@@ -45,7 +45,7 @@ let package = Package(
         
         .testTarget(
             name: "NavigationKitTests",  // 测试 `NavigationKit`
-            dependencies: ["NavigationKit"],  // 依赖 `NavigationKit`
+            dependencies: ["NavigationKit", "AppleMapKit"],  // 依赖 `NavigationKit`
             path: "Tests/NavigationKitTests"
         )
     ]

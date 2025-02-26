@@ -12,7 +12,7 @@ import Foundation
 import CoreLocation
 import Combine
 
-public final class CoreLocationKit: NSObject {
+public final class CoreLocationKit: NSObject, CLLocationManagerDelegate {
     
     /// 自定义错误类型
     public enum LocationError: Swift.Error {
@@ -27,23 +27,37 @@ public final class CoreLocationKit: NSObject {
     /// 单例
     public static let shared = CoreLocationKit()
     
+    /// `CLLocationManager` 实例（管理定位服务）
+    public let locationManager: CLLocationManager
+    
     /// 位置发布者
     public var locationPublisher: AnyPublisher<CLLocation?, Never> {
         locationSubject.eraseToAnyPublisher()
     }
     
-    /// 当前定位
+    /**
+     请求一次当前位置，call一次，只会传一个值
+     */
+    public func requestCurrentLocation() {
+        if CLLocationManager.locationServicesEnabled() {
+            locationManager.stopUpdatingLocation() // 停止持续更新，避免 `requestLocation()` 影响
+            locationManager.requestLocation()
+        }
+    }
+
+    
+    /// 当前定位，持续发送定位数据
     public var currentLocation: CLLocation? {
         locationSubject.value
     }
     
     /// 授权状态发布者
-    public var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus?, Never> {
+    public var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never> {
         authorizationStatusSubject.eraseToAnyPublisher()
     }
     
     /// 当前授权状态
-    public var currentAuthorizationStatus: CLAuthorizationStatus? {
+    public var currentAuthorizationStatus: CLAuthorizationStatus {
         authorizationStatusSubject.value
     }
     
@@ -91,19 +105,14 @@ public final class CoreLocationKit: NSObject {
         .eraseToAnyPublisher()
     }
     
-    /// CLLocationManager 实例（管理定位服务）
-    private let locationManager: CLLocationManager = {
-        let manager = CLLocationManager()
-        manager.desiredAccuracy = kCLLocationAccuracyBest
-        manager.distanceFilter = 35
-        return manager
-    }()
-    
     /// 位置订阅对象
     private let locationSubject = CurrentValueSubject<CLLocation?, Never>(nil)
     
-    /// 授权状态订阅对象
-    private let authorizationStatusSubject = CurrentValueSubject<CLAuthorizationStatus?, Never>(nil)
+    /// 授权状态订阅对象（默认值 `notDetermined`，防止 `nil`）
+//    private let authorizationStatusSubject = CurrentValueSubject<CLAuthorizationStatus, Never>(.notDetermined)
+    private let authorizationStatusSubject = CurrentValueSubject<CLAuthorizationStatus, Never>(
+        CLLocationManager.authorizationStatus()
+    )
     
     /// 方向订阅对象
     private let headingSubject = CurrentValueSubject<CLHeading?, Never>(nil)
@@ -113,8 +122,16 @@ public final class CoreLocationKit: NSObject {
     
     /// 初始化方法
     public override init() {
+        locationManager = CLLocationManager()
         super.init()
+        
         locationManager.delegate = self
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.distanceFilter = 35
+        
+        // ✅ 立即同步授权状态
+        authorizationStatusSubject.send(CLLocationManager.authorizationStatus())
+        
         locationManager.requestWhenInUseAuthorization()
         locationManager.startUpdatingLocation()
         locationManager.startUpdatingHeading()
@@ -132,9 +149,14 @@ public final class CoreLocationKit: NSObject {
 
 // MARK: - CLLocationManagerDelegate
 
-extension CoreLocationKit: CLLocationManagerDelegate {
+extension CoreLocationKit {
     
     public func locationManager(_ manager: CLLocationManager, didFailWithError error: Swift.Error) {
+        let clError = error as? CLError
+        if clError?.code == .locationUnknown {
+            print("位置暂时不可用，等待系统自动重试")
+            return
+        }
         errorSubject.send(error)
     }
     
@@ -150,3 +172,4 @@ extension CoreLocationKit: CLLocationManagerDelegate {
         headingSubject.send(newHeading)
     }
 }
+
