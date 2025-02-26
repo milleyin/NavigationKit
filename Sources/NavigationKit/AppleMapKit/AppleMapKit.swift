@@ -73,7 +73,11 @@ public final class AppleMapKit: NSObject, MKMapViewDelegate {
      - parameter start: 起点坐标
      - parameter destination: 终点坐标
      */
+    private var activeDirections: MKDirections?
+
     public func drawRoute(from start: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) {
+        activeDirections?.cancel() // 取消之前的导航任务，防止内存泄漏
+
         let startPlacemark = MKPlacemark(coordinate: start)
         let destinationPlacemark = MKPlacemark(coordinate: destination)
         
@@ -83,28 +87,31 @@ public final class AppleMapKit: NSObject, MKMapViewDelegate {
         request.transportType = .automobile
         
         let directions = MKDirections(request: request)
+        activeDirections = directions // 存储当前导航任务，防止泄漏
+
         directions.calculate { [weak self] response, error in
-            guard let self, let route = response?.routes.first else {
+            guard let route = response?.routes.first else {
                 print("导航线路生成失败: \(error?.localizedDescription ?? "未知错误")")
                 return
             }
-            
-            DispatchQueue.main.async {
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                
                 self.mapView.removeOverlays(self.mapView.overlays)
                 self.mapView.addOverlay(route.polyline, level: .aboveRoads)
-                
+
                 let routeRect = route.polyline.boundingMapRect
-                
-#if canImport(UIKit)
+    #if canImport(UIKit)
                 let edgePadding = UIEdgeInsets(top: 100, left: 50, bottom: 350, right: 50)
-#else
+    #else
                 let edgePadding = NSEdgeInsets(top: 100, left: 50, bottom: 350, right: 50)
-#endif
-                
+    #endif
                 self.mapView.setVisibleMapRect(routeRect, edgePadding: edgePadding, animated: true)
             }
         }
     }
+
     /**
      跳转 Apple Maps App 开始导航
      
