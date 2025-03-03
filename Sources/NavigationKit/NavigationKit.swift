@@ -7,5 +7,5 @@
 
 public struct NavigationKit {
     /// NavigationKit 版本号
-    public static let version: String = "1.0.1(2025017)"
+    public static let version: String = "1.0.2(2025018)"
 }
