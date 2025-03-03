@@ -162,21 +162,7 @@ public final class CoreLocationKit: NSObject, CLLocationManagerDelegate {
         }
     }
     
-    private func restartUpdatingLocation() {
-        guard CLLocationManager.locationServicesEnabled() else {
-            print("⚠️ 定位服务未启用，无法重启 `startUpdatingLocation()`")
-            return
-        }
-        locationManager.stopUpdatingLocation()
-        locationManager.startUpdatingLocation()
-
-        
-        if CLLocationManager.headingAvailable() {
-            locationManager.startUpdatingHeading()
-        } else {
-            print("⚠️ 设备不支持方向数据，跳过 `startUpdatingHeading()`")
-        }
-    }
+    
 }
 
 // MARK: - CLLocationManagerDelegate
@@ -230,80 +216,8 @@ extension CoreLocationKit {
     }
 }
 
-// MARK: - 定位请求相关 API
 
-extension CoreLocationKit {
-    /**
-     设置是否允许后台位置更新。
-     
-     - Important: 仅当应用拥有 **`authorizedAlways`** 权限时才可启用后台定位。
-     若当前授权状态不是 `authorizedAlways`，则不会修改 `allowsBackgroundLocationUpdates`，
-     并会打印警告信息。
-     - Attention: 启用后台定位可能会显著增加电量消耗，应仅在必要时使用。
-     - Warning: 若未在 `Info.plist` 添加 `UIBackgroundModes` -> `location`，
-     即使设置 `allowsBackgroundLocationUpdates = true`，后台定位仍不会生效。
-     - Note:
-     - iOS 13+ 需要用户在系统设置中 **手动开启** `Always Allow`。
-     - 后台定位适用于 **步行导航、车辆跟踪、健身应用** 等场景。
-     
-     # 使用示例
-     ```swift
-     CoreLocationKit.shared.allowBackgroundLocationUpdates(true)
-     ```
-     
-     - parameter allowed: 是否允许后台定位，`true` 开启，`false` 关闭。
-     */
-    public func allowBackgroundLocationUpdates(_ allowed: Bool) {
-        guard currentAuthorizationStatus == .authorizedAlways else {
-            print("⚠️ 请启用 `always` 授权，以允许后台更新位置")
-            return
-        }
-        
-        guard UIApplication.shared.backgroundRefreshStatus == .available else {
-            print("⚠️ 设备禁用了后台刷新，后台定位功能可能无法生效")
-            return
-        }
-        
-        locationManager.allowsBackgroundLocationUpdates = allowed
-        locationManager.pausesLocationUpdatesAutomatically = !allowed
-        
-        if allowed {
-            print("✅ 后台定位已启用")
-        } else {
-            print("⏹️ 后台定位已关闭")
-        }
-    }
-    
-    /**
-     请求一次当前位置。
-     
-     - Important: 该方法每次调用仅返回一个位置信息，适用于 **单次获取用户位置** 的场景。
-     - Precondition: 设备定位服务必须已启用 (`CLLocationManager.locationServicesEnabled()` 返回 `true`)，否则不会触发回调。
-     - Postcondition: 如果请求成功，`locationManager(_:didUpdateLocations:)` 将接收到最新的位置数据。
-     - Throws: `LocationError.locationUnavailable` 如果定位服务未启用。
-     - Example:
-     ```swift
-     CoreLocationKit.shared.requestCurrentLocation()
-     ```
-     */
-    public func requestCurrentLocation() {
-        guard CLLocationManager.locationServicesEnabled() else {
-            errorSubject.send(LocationError.locationServicesDisabled)
-            print("⚠️ 定位服务未启用，请在系统设置中打开")
-            return
-        }
-
-        guard currentAuthorizationStatus == .authorizedWhenInUse || currentAuthorizationStatus == .authorizedAlways else {
-            errorSubject.send(LocationError.permissionDenied)
-            print("⚠️ 当前没有定位权限，无法执行 requestLocation()")
-            return
-        }
-
-        locationManager.requestLocation()
-    }
-}
-
-//MARK: - 方法函数
+//MARK: - 外部方法函数
 
 extension CoreLocationKit {
     /**
@@ -362,7 +276,96 @@ extension CoreLocationKit {
         }
         .eraseToAnyPublisher()
     }
+    
+    /**
+     请求一次当前位置。
+     
+     - Important: 该方法每次调用仅返回一个位置信息，适用于 **单次获取用户位置** 的场景。
+     - Precondition: 设备定位服务必须已启用 (`CLLocationManager.locationServicesEnabled()` 返回 `true`)，否则不会触发回调。
+     - Postcondition: 如果请求成功，`locationManager(_:didUpdateLocations:)` 将接收到最新的位置数据。
+     - Throws: `LocationError.locationUnavailable` 如果定位服务未启用。
+     - Example:
+     ```swift
+     CoreLocationKit.shared.requestCurrentLocation()
+     ```
+     */
+    public func requestCurrentLocation() {
+        guard CLLocationManager.locationServicesEnabled() else {
+            errorSubject.send(LocationError.locationServicesDisabled)
+            print("⚠️ 定位服务未启用，请在系统设置中打开")
+            return
+        }
 
+        guard currentAuthorizationStatus == .authorizedWhenInUse || currentAuthorizationStatus == .authorizedAlways else {
+            errorSubject.send(LocationError.permissionDenied)
+            print("⚠️ 当前没有定位权限，无法执行 requestLocation()")
+            return
+        }
+
+        locationManager.requestLocation()
+    }
+    
+    /**
+     设置是否允许后台位置更新。
+     
+     - Important: 仅当应用拥有 **`authorizedAlways`** 权限时才可启用后台定位。
+     若当前授权状态不是 `authorizedAlways`，则不会修改 `allowsBackgroundLocationUpdates`，
+     并会打印警告信息。
+     - Attention: 启用后台定位可能会显著增加电量消耗，应仅在必要时使用。
+     - Warning: 若未在 `Info.plist` 添加 `UIBackgroundModes` -> `location`，
+     即使设置 `allowsBackgroundLocationUpdates = true`，后台定位仍不会生效。
+     - Note:
+     - iOS 13+ 需要用户在系统设置中 **手动开启** `Always Allow`。
+     - 后台定位适用于 **步行导航、车辆跟踪、健身应用** 等场景。
+     
+     # 使用示例
+     ```swift
+     CoreLocationKit.shared.allowBackgroundLocationUpdates(true)
+     ```
+     
+     - parameter allowed: 是否允许后台定位，`true` 开启，`false` 关闭。
+     */
+    public func allowBackgroundLocationUpdates(_ allowed: Bool) {
+        guard currentAuthorizationStatus == .authorizedAlways else {
+            print("⚠️ 请启用 `always` 授权，以允许后台更新位置")
+            return
+        }
+        
+        guard UIApplication.shared.backgroundRefreshStatus == .available else {
+            print("⚠️ 设备禁用了后台刷新，后台定位功能可能无法生效")
+            return
+        }
+        
+        locationManager.allowsBackgroundLocationUpdates = allowed
+        locationManager.pausesLocationUpdatesAutomatically = !allowed
+        
+        if allowed {
+            print("✅ 后台定位已启用")
+        } else {
+            print("⏹️ 后台定位已关闭")
+        }
+    }
+
+}
+
+//MARK: - 内部方法
+extension CoreLocationKit {
+    ///重新获取定位数据
+    private func restartUpdatingLocation() {
+        guard CLLocationManager.locationServicesEnabled() else {
+            print("⚠️ 定位服务未启用，无法重启 `startUpdatingLocation()`")
+            return
+        }
+        locationManager.stopUpdatingLocation()
+        locationManager.startUpdatingLocation()
+
+        
+        if CLLocationManager.headingAvailable() {
+            locationManager.startUpdatingHeading()
+        } else {
+            print("⚠️ 设备不支持方向数据，跳过 `startUpdatingHeading()`")
+        }
+    }
 }
 
 //MARK: - 类型定义

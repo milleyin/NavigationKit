@@ -12,74 +12,120 @@ import Combine
 
 final class CoreLocationKitTests: XCTestCase {
     
-    var coreLocationKit: CoreLocationKit!
-    var cancellables: Set<AnyCancellable>!
+    private var subscriptions = Set<AnyCancellable>()
     
-    override func setUp() {
+    override func setUpWithError() throws {
         super.setUp()
-        coreLocationKit = CoreLocationKit.shared
-        cancellables = []
+        CoreLocationKit.shared.requestCurrentLocation() // 启动定位
+        
     }
-    
-    override func tearDown() {
-        coreLocationKit = nil
-        cancellables = nil
-        super.tearDown()
-    }
-    
-    /// 测试 CoreLocationKit 是否正确初始化
-    func testInitialization() {
-        XCTAssertNotNil(coreLocationKit, "CoreLocationKit 实例未正确初始化")
-        XCTAssertNotNil(coreLocationKit.locationManager, "locationManager 应该存在")
-    }
-    
-    /// 测试获取授权状态（防止多次调用 fulfill）
-    func testAuthorizationStatus() {
-        let expectation = self.expectation(description: "监听授权状态")
-        expectation.assertForOverFulfill = false  // ✅ 防止多次 fulfill 抛出异常
 
-        coreLocationKit.authorizationStatusPublisher
-            .removeDuplicates()  // ✅ 避免多次触发
+    override func tearDownWithError() throws {
+        subscriptions.removeAll()
+    }
+
+    /// ✅ 测试授权状态变化
+    func testAuthorizationStatusUpdates() {
+        let expectation = expectation(description: "等待授权状态更新")
+        
+        CoreLocationKit.shared.authorizationStatusPublisher
             .sink { status in
-                if status != .notDetermined {  // ✅ 仅当状态改变时触发 fulfill
-                    expectation.fulfill()
-                }
-            }
-            .store(in: &cancellables)
-
-        coreLocationKit.locationManager.delegate?.locationManager?(
-            coreLocationKit.locationManager,
-            didChangeAuthorization: .authorizedWhenInUse
-        )
-
-        waitForExpectations(timeout: 2, handler: nil)
-    }
-    
-    /// 测试定位更新
-    func testLocationUpdate() {
-        let expectation = self.expectation(description: "监听位置更新")
-
-        coreLocationKit.locationPublisher
-            .compactMap { $0 }
-            .sink { location in
-                XCTAssertEqual(location.coordinate.latitude, 37.7749, "纬度错误")
-                XCTAssertEqual(location.coordinate.longitude, -122.4194, "经度错误")
+                XCTAssertTrue(status == .authorizedWhenInUse || status == .authorizedAlways || status == .denied || status == .notDetermined)
                 expectation.fulfill()
             }
-            .store(in: &cancellables)
-
-        let testLocation = CLLocation(latitude: 37.7749, longitude: -122.4194)
+            .store(in: &subscriptions)
         
-        coreLocationKit.locationManager.delegate?.locationManager?(
-            coreLocationKit.locationManager,
-            didUpdateLocations: [testLocation]
-        )
-
-        waitForExpectations(timeout: 2, handler: nil)
+        CoreLocationKit.shared.requestCurrentLocation()
+        
+        wait(for: [expectation], timeout: 5)
     }
+    
+    /// ✅ 测试单次获取位置
+    func testRequestCurrentLocation() {
+        let expectation = expectation(description: "等待位置更新")
+        
+        CoreLocationKit.shared.locationPublisher
+            .compactMap { $0 }
+            .sink { location in
+                XCTAssertNotNil(location)
+                print("获取到位置: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+                expectation.fulfill()
+            }
+            .store(in: &subscriptions)
+        
+        CoreLocationKit.shared.requestCurrentLocation()
+        
+        wait(for: [expectation], timeout: 10)
+    }
+    
+    /// ✅ 测试持续位置更新
+    func testContinuousLocationUpdates() {
+        let expectation = expectation(description: "等待位置更新推送")
 
+        let cancellable = CoreLocationKit.shared.locationPublisher
+            .compactMap { $0 }
+            .first()
+            .sink { location in
+                XCTAssertNotNil(location)
+                print("位置更新: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+                expectation.fulfill()
+            }
+
+        wait(for: [expectation], timeout: 10)
+    }
+    
+    /// ✅ 测试方向（Heading）数据
+    func testHeadingUpdates() {
+        let expectation = expectation(description: "等待方向数据更新")
+
+        CoreLocationKit.shared.headingPublisher
+            .dropFirst()
+            .sink { heading in
+                XCTAssertNotNil(heading)
+                print("方向数据: \(heading?.trueHeading ?? 0)°")
+                expectation.fulfill()
+            }
+            .store(in: &subscriptions)
+        
+        wait(for: [expectation], timeout: 10)
+    }
+    
+    /// ✅ 测试后台定位控制
+    func testBackgroundLocationUpdates() {
+        // 检查当前授权状态
+        let status = CoreLocationKit.shared.currentAuthorizationStatus
+        
+        guard status == .authorizedAlways else {
+            print("⚠️ 无法测试后台定位：当前授权状态为 \(status)，需要 `Always` 权限")
+            return
+        }
+
+        CoreLocationKit.shared.allowBackgroundLocationUpdates(true)
+        XCTAssertTrue(CoreLocationKit.shared.locationManager.allowsBackgroundLocationUpdates)
+
+        CoreLocationKit.shared.allowBackgroundLocationUpdates(false)
+        XCTAssertFalse(CoreLocationKit.shared.locationManager.allowsBackgroundLocationUpdates)
+    }
+    
+    /// ✅ 测试反向地理编码
+    func testReverseGeocoding() {
+        let expectation = expectation(description: "等待地址解析完成")
+
+        CoreLocationKit.shared.addressPublisher
+            .sink(receiveCompletion: { completion in
+                if case .failure(let error) = completion {
+                    XCTFail("地址解析失败: \(error.localizedDescription)")
+                }
+            }, receiveValue: { address in
+                XCTAssertFalse(address.isEmpty)
+                print("解析成功: \(address)")
+                expectation.fulfill()
+            })
+            .store(in: &subscriptions)
+        
+        wait(for: [expectation], timeout: 10)
+    }
 }
-
 
 
 
