@@ -11,9 +11,11 @@
 import Foundation
 import CoreLocation
 import Combine
+#if os(iOS)
 import UIKit
+#endif
 
-public final class CoreLocationKit: NSObject, CLLocationManagerDelegate {
+public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     /// 单例
     public static let shared = CoreLocationKit()
