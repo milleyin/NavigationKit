@@ -353,11 +353,10 @@ extension CoreLocationKit {
         #endif
 
         print("📡 requestLocation() 正在发出定位请求...")
-
         locationManager.requestLocation()
 
         #if os(macOS)
-        // macOS fallback：确保真正触发 didUpdateLocations
+        // ⛑️ Fallback：macOS 某些系统环境下不会触发定位回调，需强制激活更新
         locationManager.startUpdatingLocation()
         #endif
     }
