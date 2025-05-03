@@ -247,6 +247,7 @@ extension CoreLocationKit {
             print("⚠️ `didUpdateLocations` 收到空位置数组，可能是 CoreLocation 异常行为")
             return
         }
+        print("✅ 成功获取位置: \(lastLocation.coordinate.latitude), \(lastLocation.coordinate.longitude)")
         locationSubject.send(lastLocation)
     }
     
