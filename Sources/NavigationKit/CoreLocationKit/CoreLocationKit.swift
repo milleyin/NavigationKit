@@ -334,24 +334,31 @@ extension CoreLocationKit {
             print("⚠️ 定位服务未启用，请在系统设置中打开")
             return
         }
-        
+
         #if os(iOS)
         let status = CLLocationManager.authorizationStatus()
-        if status != .authorizedWhenInUse && status != .authorizedAlways {
+        guard status == .authorizedWhenInUse || status == .authorizedAlways else {
             errorSubject.send(LocationError.permissionDenied)
             print("⚠️ 当前没有定位权限，无法执行 requestLocation()")
             return
         }
         #elseif os(macOS)
         let status = locationManager.authorizationStatus
-        if status != .authorizedAlways {
+        guard status == .authorizedAlways else {
             errorSubject.send(LocationError.permissionDenied)
             print("⚠️ 当前没有定位权限，无法执行 requestLocation()")
             return
         }
         #endif
-        
+
+        print("📡 requestLocation() 正在发出定位请求...")
+
         locationManager.requestLocation()
+
+        #if os(macOS)
+        // macOS fallback：确保真正触发 didUpdateLocations
+        locationManager.startUpdatingLocation()
+        #endif
     }
     
     /**
