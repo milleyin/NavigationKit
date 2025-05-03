@@ -405,6 +405,32 @@ extension CoreLocationKit {
         print("⚠️ macOS 不支持后台定位更新功能")
         #endif
     }
+    
+    /**
+     主动请求定位授权（显式调用）
+
+     - Important: macOS 仅支持 `.authorizedAlways`；iOS 若只接受后台定位，也应限制为 `.authorizedAlways`。
+     - Attention: 若当前状态已是 `.authorizedAlways`，则不会重复请求授权。
+     - Warning: 此方法不会强制弹出授权对话框，若用户已拒绝授权，系统不会再次弹出。
+     */
+    public func requestAuthorization() {
+        #if os(iOS)
+        let status = CLLocationManager.authorizationStatus()
+        guard status != .authorizedAlways else { return }
+
+        DispatchQueue.main.async {
+            self.locationManager.requestWhenInUseAuthorization()
+        }
+
+        #elseif os(macOS)
+        let status = locationManager.authorizationStatus
+        guard status != .authorizedAlways else { return }
+
+        DispatchQueue.main.async {
+            self.locationManager.requestWhenInUseAuthorization()
+        }
+        #endif
+    }
 
 }
 
