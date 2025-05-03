@@ -11,9 +11,11 @@
 import Foundation
 import CoreLocation
 import Combine
+#if os(iOS)
 import UIKit
+#endif
 
-public final class CoreLocationKit: NSObject, CLLocationManagerDelegate {
+public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     /// 单例
     public static let shared = CoreLocationKit()
@@ -49,10 +51,10 @@ public final class CoreLocationKit: NSObject, CLLocationManagerDelegate {
         locationManager.desiredAccuracy = accuracy
         locationManager.distanceFilter = distanceFilter
         
-        // ✅ 立即同步授权状态
+        #if os(iOS)
+        // iOS: 继续使用静态方法
         authorizationStatusSubject.send(CLLocationManager.authorizationStatus())
         
-        // 请求定位授权
         if CLLocationManager.authorizationStatus() == .notDetermined {
             DispatchQueue.main.async {
                 self.locationManager.requestWhenInUseAuthorization()
@@ -63,6 +65,22 @@ public final class CoreLocationKit: NSObject, CLLocationManagerDelegate {
             locationManager.startUpdatingLocation()
             locationManager.startUpdatingHeading()
         }
+        
+        #elseif os(macOS)
+        // macOS: 必须用实例属性
+        authorizationStatusSubject.send(locationManager.authorizationStatus)
+        
+        if locationManager.authorizationStatus == .notDetermined {
+            DispatchQueue.main.async {
+                self.locationManager.requestWhenInUseAuthorization()
+            }
+        }
+        
+        if locationManager.authorizationStatus == .authorizedAlways {
+            locationManager.startUpdatingLocation()
+            locationManager.startUpdatingHeading()
+        }
+        #endif
     }
     
     
@@ -136,9 +154,13 @@ public final class CoreLocationKit: NSObject, CLLocationManagerDelegate {
     private let locationSubject = CurrentValueSubject<CLLocation?, Never>(nil)
     
     /// 授权状态订阅对象（默认值 `notDetermined`，防止 `nil`）
-    private let authorizationStatusSubject = CurrentValueSubject<CLAuthorizationStatus, Never>(
-        CLLocationManager.authorizationStatus()
-    )
+    private let authorizationStatusSubject: CurrentValueSubject<CLAuthorizationStatus, Never> = {
+        #if os(iOS)
+        return CurrentValueSubject(CLLocationManager.authorizationStatus())
+        #elseif os(macOS)
+        return CurrentValueSubject(CLLocationManager().authorizationStatus)
+        #endif
+    }()
     
     /// 方向订阅对象
     private let headingSubject = CurrentValueSubject<CLHeading?, Never>(nil)
@@ -153,13 +175,21 @@ public final class CoreLocationKit: NSObject, CLLocationManagerDelegate {
      - parameter distance: 触发 `didUpdateLocations` 事件的最小移动距离（默认值 `35` 米）
      */
     public func setLocationAccuracy(_ accuracy: CLLocationAccuracy = kCLLocationAccuracyBest,
-                                    distanceFilter distance: CLLocationDistance = 35) {
+                                     distanceFilter distance: CLLocationDistance = 35) {
         locationManager.desiredAccuracy = accuracy
         locationManager.distanceFilter = distance
         
-        if CLLocationManager.authorizationStatus() == .authorizedWhenInUse || CLLocationManager.authorizationStatus() == .authorizedAlways {
+        #if os(iOS)
+        let status = CLLocationManager.authorizationStatus()
+        if status == .authorizedWhenInUse || status == .authorizedAlways {
             restartUpdatingLocation()
         }
+        #elseif os(macOS)
+        let status = locationManager.authorizationStatus
+        if status == .authorizedAlways {
+            restartUpdatingLocation()
+        }
+        #endif
     }
     
     
@@ -194,6 +224,7 @@ extension CoreLocationKit {
     public func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
         authorizationStatusSubject.send(status)
         
+        #if os(iOS)
         if status == .authorizedWhenInUse || status == .authorizedAlways {
             locationManager.startUpdatingLocation()
             locationManager.startUpdatingHeading()
@@ -201,6 +232,14 @@ extension CoreLocationKit {
             locationManager.stopUpdatingLocation()
             locationManager.stopUpdatingHeading()
         }
+        
+        #elseif os(macOS)
+        if status == .authorizedAlways {
+            locationManager.startUpdatingLocation()
+        } else {
+            locationManager.stopUpdatingLocation()
+        }
+        #endif
     }
     
     public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -208,6 +247,7 @@ extension CoreLocationKit {
             print("⚠️ `didUpdateLocations` 收到空位置数组，可能是 CoreLocation 异常行为")
             return
         }
+        print("✅ 成功获取位置: \(lastLocation.coordinate.latitude), \(lastLocation.coordinate.longitude)")
         locationSubject.send(lastLocation)
     }
     
@@ -296,13 +336,29 @@ extension CoreLocationKit {
             return
         }
 
-        guard currentAuthorizationStatus == .authorizedWhenInUse || currentAuthorizationStatus == .authorizedAlways else {
+        #if os(iOS)
+        let status = CLLocationManager.authorizationStatus()
+        guard status == .authorizedWhenInUse || status == .authorizedAlways else {
             errorSubject.send(LocationError.permissionDenied)
             print("⚠️ 当前没有定位权限，无法执行 requestLocation()")
             return
         }
+        #elseif os(macOS)
+        let status = locationManager.authorizationStatus
+        guard status == .authorizedAlways else {
+            errorSubject.send(LocationError.permissionDenied)
+            print("⚠️ 当前没有定位权限，无法执行 requestLocation()")
+            return
+        }
+        #endif
 
+        print("📡 requestLocation() 正在发出定位请求...")
         locationManager.requestLocation()
+
+        #if os(macOS)
+        // ⛑️ Fallback：macOS 某些系统环境下不会触发定位回调，需强制激活更新
+        locationManager.startUpdatingLocation()
+        #endif
     }
     
     /**
@@ -326,8 +382,9 @@ extension CoreLocationKit {
      - parameter allowed: 是否允许后台定位，`true` 开启，`false` 关闭。
      */
     public func allowBackgroundLocationUpdates(_ allowed: Bool) {
-        guard currentAuthorizationStatus == .authorizedAlways else {
-            print("⚠️ 请启用 `always` 授权，以允许后台更新位置")
+        #if os(iOS)
+        guard CLLocationManager.authorizationStatus() == .authorizedAlways else {
+            print("⚠️ 请启用 `Always` 授权，以允许后台更新位置")
             return
         }
         
@@ -344,6 +401,9 @@ extension CoreLocationKit {
         } else {
             print("⏹️ 后台定位已关闭")
         }
+        #else
+        print("⚠️ macOS 不支持后台定位更新功能")
+        #endif
     }
 
 }
