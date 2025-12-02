@@ -30,7 +30,23 @@ final class CoreLocationKitTests: XCTestCase {
         
         CoreLocationKit.shared.authorizationStatusPublisher
             .sink { status in
-                XCTAssertTrue(status == .authorizedWhenInUse || status == .authorizedAlways || status == .denied || status == .notDetermined)
+                #if os(iOS)
+                XCTAssertTrue(
+                    status == .authorizedWhenInUse ||
+                    status == .authorizedAlways ||
+                    status == .denied ||
+                    status == .restricted ||
+                    status == .notDetermined
+                )
+                #elseif os(macOS)
+                XCTAssertTrue(
+                    status == .authorizedAlways ||
+                    status == .denied ||
+                    status == .restricted ||
+                    status == .notDetermined
+                )
+                #endif
+                
                 expectation.fulfill()
             }
             .store(in: &subscriptions)
@@ -125,6 +141,38 @@ final class CoreLocationKitTests: XCTestCase {
         
         wait(for: [expectation], timeout: 10)
     }
+    
+    /// ✅ 测试 speedPublisher 是否正确收到速度更新
+        func testSpeedPublisherReceivesCorrectSpeed() {
+            let expectation = expectation(description: "等待速度更新")
+            
+            let kit = CoreLocationKit.shared
+            
+            // 订阅速度变化
+            kit.speedPublisher
+                .dropFirst()   // 避免初始 0 立刻触发
+                .sink { speed in
+                    XCTAssertEqual(speed, 10.0, accuracy: 0.01)
+                    expectation.fulfill()
+                }
+                .store(in: &subscriptions)
+            
+            // 构造模拟坐标点（速度 10 m/s）
+            let mockLocation = CLLocation(
+                coordinate: CLLocationCoordinate2D(latitude: 25.0, longitude: 121.0),
+                altitude: 10,
+                horizontalAccuracy: 5,
+                verticalAccuracy: 5,
+                course: 0,
+                speed: 10.0,       // ⚡ 关键：模拟速度
+                timestamp: Date()
+            )
+            
+            // 手动触发 delegate
+            kit.locationManager(kit.locationManager, didUpdateLocations: [mockLocation])
+            
+            wait(for: [expectation], timeout: 1)
+        }
 }
 
 
