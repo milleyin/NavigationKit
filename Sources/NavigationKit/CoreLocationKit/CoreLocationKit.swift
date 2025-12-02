@@ -139,6 +139,11 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
         headingSubject.eraseToAnyPublisher()
     }
     
+    /// 速度发布者（单位：m/s）
+    public var speedPublisher: AnyPublisher<CLLocationSpeed, Never> {
+        speedSubject.eraseToAnyPublisher()
+    }
+
     /// 当前方向数据
     public var currentHeading: CLHeading? {
         headingSubject.value
@@ -164,7 +169,8 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
     
     /// 方向订阅对象
     private let headingSubject = CurrentValueSubject<CLHeading?, Never>(nil)
-    
+    /// 速度订阅对象（m/s）
+    private let speedSubject = CurrentValueSubject<CLLocationSpeed, Never>(0)
     /// 错误信息订阅对象
     private let errorSubject = CurrentValueSubject<Swift.Error?, Never>(nil)
     
@@ -249,6 +255,10 @@ extension CoreLocationKit {
         }
         print("✅ 成功获取位置: \(lastLocation.coordinate.latitude), \(lastLocation.coordinate.longitude)")
         locationSubject.send(lastLocation)
+        
+        // 原生速度（m/s）
+        let rawSpeed = lastLocation.speed >= 0 ? lastLocation.speed : 0
+        speedSubject.send(rawSpeed)
     }
     
     public func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
