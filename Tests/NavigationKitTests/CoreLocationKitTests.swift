@@ -19,18 +19,18 @@ final class CoreLocationKitTests: XCTestCase {
         CoreLocationKit.shared.requestCurrentLocation() // 启动定位
         
     }
-
+    
     override func tearDownWithError() throws {
         subscriptions.removeAll()
     }
-
+    
     /// ✅ 测试授权状态变化
     func testAuthorizationStatusUpdates() {
         let expectation = expectation(description: "等待授权状态更新")
         
         CoreLocationKit.shared.authorizationStatusPublisher
             .sink { status in
-                #if os(iOS)
+#if os(iOS)
                 XCTAssertTrue(
                     status == .authorizedWhenInUse ||
                     status == .authorizedAlways ||
@@ -38,14 +38,14 @@ final class CoreLocationKitTests: XCTestCase {
                     status == .restricted ||
                     status == .notDetermined
                 )
-                #elseif os(macOS)
+#elseif os(macOS)
                 XCTAssertTrue(
                     status == .authorizedAlways ||
                     status == .denied ||
                     status == .restricted ||
                     status == .notDetermined
                 )
-                #endif
+#endif
                 
                 expectation.fulfill()
             }
@@ -77,7 +77,7 @@ final class CoreLocationKitTests: XCTestCase {
     /// ✅ 测试持续位置更新
     func testContinuousLocationUpdates() {
         let expectation = expectation(description: "等待位置更新推送")
-
+        
         let cancellable = CoreLocationKit.shared.locationPublisher
             .compactMap { $0 }
             .first()
@@ -86,14 +86,14 @@ final class CoreLocationKitTests: XCTestCase {
                 print("位置更新: \(location.coordinate.latitude), \(location.coordinate.longitude)")
                 expectation.fulfill()
             }
-
+        
         wait(for: [expectation], timeout: 10)
     }
     
     /// ✅ 测试方向（Heading）数据
     func testHeadingUpdates() {
         let expectation = expectation(description: "等待方向数据更新")
-
+        
         CoreLocationKit.shared.headingPublisher
             .dropFirst()
             .sink { heading in
@@ -115,10 +115,10 @@ final class CoreLocationKitTests: XCTestCase {
             print("⚠️ 无法测试后台定位：当前授权状态为 \(status)，需要 `Always` 权限")
             return
         }
-
+        
         CoreLocationKit.shared.allowBackgroundLocationUpdates(true)
         XCTAssertTrue(CoreLocationKit.shared.locationManager.allowsBackgroundLocationUpdates)
-
+        
         CoreLocationKit.shared.allowBackgroundLocationUpdates(false)
         XCTAssertFalse(CoreLocationKit.shared.locationManager.allowsBackgroundLocationUpdates)
     }
@@ -126,7 +126,7 @@ final class CoreLocationKitTests: XCTestCase {
     /// ✅ 测试反向地理编码
     func testReverseGeocoding() {
         let expectation = expectation(description: "等待地址解析完成")
-
+        
         CoreLocationKit.shared.addressPublisher
             .sink(receiveCompletion: { completion in
                 if case .failure(let error) = completion {
@@ -143,36 +143,69 @@ final class CoreLocationKitTests: XCTestCase {
     }
     
     /// ✅ 测试 speedPublisher 是否正确收到速度更新
-        func testSpeedPublisherReceivesCorrectSpeed() {
-            let expectation = expectation(description: "等待速度更新")
-            
-            let kit = CoreLocationKit.shared
-            
-            // 订阅速度变化
-            kit.speedPublisher
-                .dropFirst()   // 避免初始 0 立刻触发
-                .sink { speed in
-                    XCTAssertEqual(speed, 10.0, accuracy: 0.01)
-                    expectation.fulfill()
-                }
-                .store(in: &subscriptions)
-            
-            // 构造模拟坐标点（速度 10 m/s）
-            let mockLocation = CLLocation(
-                coordinate: CLLocationCoordinate2D(latitude: 25.0, longitude: 121.0),
-                altitude: 10,
-                horizontalAccuracy: 5,
-                verticalAccuracy: 5,
-                course: 0,
-                speed: 10.0,       // ⚡ 关键：模拟速度
-                timestamp: Date()
-            )
-            
-            // 手动触发 delegate
-            kit.locationManager(kit.locationManager, didUpdateLocations: [mockLocation])
-            
-            wait(for: [expectation], timeout: 1)
-        }
+    func testSpeedPublisherReceivesCorrectSpeed() {
+        let expectation = expectation(description: "等待速度更新")
+        
+        let kit = CoreLocationKit.shared
+        
+        // 订阅速度变化
+        kit.speedPublisher
+            .dropFirst()   // 避免初始 0 立刻触发
+            .sink { speed in
+                XCTAssertEqual(speed, 10.0, accuracy: 0.01)
+                expectation.fulfill()
+            }
+            .store(in: &subscriptions)
+        
+        // 构造模拟坐标点（速度 10 m/s）
+        let mockLocation = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 25.0, longitude: 121.0),
+            altitude: 10,
+            horizontalAccuracy: 5,
+            verticalAccuracy: 5,
+            course: 0,
+            speed: 10.0,       // ⚡ 关键：模拟速度
+            timestamp: Date()
+        )
+        
+        // 手动触发 delegate
+        kit.locationManager(kit.locationManager, didUpdateLocations: [mockLocation])
+        
+        wait(for: [expectation], timeout: 1)
+    }
+    
+    /// 测试 altitudePublisher 是否收到正确海拔
+    func testAltitudePublisherReceivesAltitude() {
+        let expectation = expectation(description: "等待海拔更新")
+        
+        let kit = CoreLocationKit.shared
+        
+        // 订阅海拔变化
+        kit.altitudePublisher
+            .dropFirst() // 跳过默认值 0
+            .sink { altitude in
+                XCTAssertEqual(altitude, 123.45, accuracy: 0.01)
+                expectation.fulfill()
+            }
+            .store(in: &subscriptions)
+        
+        // 构造模拟定位点（海拔 123.45 米）
+        let mockLocation = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 25.0, longitude: 121.0),
+            altitude: 123.45,           // ⭐ 关键：模拟海拔
+            horizontalAccuracy: 5,
+            verticalAccuracy: 5,
+            course: 0,
+            speed: 0,
+            timestamp: Date()
+        )
+        
+        // 触发 delegate，让 CoreLocationKit 接收到这个模拟点
+        kit.locationManager(kit.locationManager,
+                            didUpdateLocations: [mockLocation])
+        
+        wait(for: [expectation], timeout: 1)
+    }
 }
 
 
