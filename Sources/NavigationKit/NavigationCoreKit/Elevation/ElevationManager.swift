@@ -191,4 +191,67 @@ public final class ElevationManager: ObservableObject {
         lastAltitude = filtered
         NavigationCoreKit.debugLog("alt=\(rawAltitude), filtered=\(filtered), gain=\(elevationGain), loss=\(elevationLoss), gradient=\(gradient)")
     }
+    /**
+     重置海拔管理器的内部状态，包括平滑海拔、累计爬升/下降、坡度等统计信息。
+
+     - Important:
+       调用本方法会 **清空所有已计算的数据**，并使 `ElevationManager` 回到“初始状态”，
+       相当于刚创建对象时的状态。适用于以下场景：
+       - 开始新的记录 Session（骑行 / 路线跟踪 / 导航）
+       - 用户主动点击“重置统计”
+       - 停止默认海拔管道后准备重新开始
+
+     - Attention:
+       本方法不会停止任何正在进行的 Publisher 订阅。
+       如果你使用的是 `NavigationKit.startDefaultElevationPipeline()` 搭建的默认数据管道，
+       请在调用本方法前务必使用 `NavigationKit.stopElevationPipeline()` 停止管道，否则
+       订阅仍在运行，会立即推入新的样本并重建统计数据。
+
+     - Bug:
+       若在 `processAltitudeSample` 正在执行时（即高频调用中）并发调用本方法，可能导致
+       统计状态瞬间出现不一致。建议在管道停止后或在安全的线程环境中调用。
+
+     - Warning:
+       调用本方法后，`lastAltitude` 会被清空，在下一次处理样本时将视为“第一次输入”，
+       不会计算坡度、累计爬升或累计下降，直到至少有两个有效样本为止。
+
+     - Remark:
+       若你想要“保留累计爬升，但更新平滑海拔”，则**不要调用 reset()**，而应考虑
+       在外层加自定义逻辑，而不是清空全部状态。
+
+     - Note:
+       `ElevationStatistics.reset(withInitialAltitude:)` 会将统计器内部的总爬升、总下降、
+       历史峰值等全部恢复到初始值。
+
+     - Precondition:
+       `ElevationManager` 当前实例即将开始新的海拔数据流，或你希望丢弃之前所有统计。
+
+     - Postcondition:
+       以下值将被重置为初始状态：
+       - `smoothedAltitude = 0`
+       - `gradient = 0`
+       - `elevationGain = 0`
+       - `elevationLoss = 0`
+       - `lastAltitude = nil`
+       - `statistics` 清空并等待下一次输入重新初始化
+
+     # 使用示例
+     ```swift
+     // 停止管道
+     NavigationKit.stopElevationPipeline()
+
+     // 重置状态
+     NavigationKit.elevationManager.reset()
+
+     // 再次开始新的记录
+     NavigationKit.startDefaultElevationPipeline()
+     */
+    public func reset() {
+        smoothedAltitude = 0
+        gradient = 0
+        elevationGain = 0
+        elevationLoss = 0
+        lastAltitude = nil
+        statistics.reset(withInitialAltitude: nil)
+    }
 }
