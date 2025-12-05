@@ -90,20 +90,19 @@ final class CoreLocationKitTests: XCTestCase {
         wait(for: [expectation], timeout: 10)
     }
     
-    /// ✅ 测试方向（Heading）数据
-    func testHeadingUpdates() {
-        let expectation = expectation(description: "等待方向数据更新")
+    /// ✅ 测试 headingPublisher 初始值行为（不依赖真实传感器）
+    func testHeadingPublisherInitialValueIsNil() {
+        let expectation = expectation(description: "订阅 headingPublisher 得到初始值")
         
         CoreLocationKit.shared.headingPublisher
-            .dropFirst()
             .sink { heading in
-                XCTAssertNotNil(heading)
-                print("方向数据: \(heading?.trueHeading ?? 0)°")
+                // 初始值应该是 nil（CurrentValueSubject(nil)）
+                XCTAssertNil(heading, "初始 heading 应为 nil")
                 expectation.fulfill()
             }
             .store(in: &subscriptions)
         
-        wait(for: [expectation], timeout: 10)
+        wait(for: [expectation], timeout: 1)
     }
     
     /// ✅ 测试后台定位控制

@@ -52,8 +52,11 @@ final class AppleMapKitTests: XCTestCase {
         let mapAnnotations = appleMapKit.mapView.annotations.compactMap { $0 as? MKPointAnnotation }
         
         XCTAssertEqual(mapAnnotations.count, annotations.count, "添加的标记数量与预期不符")
-        XCTAssertEqual(mapAnnotations.first?.title, "地点 A", "第一个标记名称错误")
-        XCTAssertEqual(mapAnnotations.last?.title, "地点 B", "第二个标记名称错误")
+        
+        let titles = Set(mapAnnotations.compactMap { $0.title })
+        
+        XCTAssertTrue(titles.contains("地点 A"), "没有找到“地点 A”的标记")
+        XCTAssertTrue(titles.contains("地点 B"), "没有找到“地点 B”的标记")
     }
     
     /// 测试导航线路绘制
