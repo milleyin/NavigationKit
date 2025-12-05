@@ -1,209 +1,175 @@
-# NavigationKit User Guide
+# 🚀 NavigationKit — Swift Navigation Framework
 
-![DALL·E-2025-02-21-15 01 39-A-professional-and-modern-promotional-banner-for-NavigationKit-a-powerful-Swift-framework-for-navigation-and-location-based-services -The-design-sh](https://github.com/user-attachments/assets/9c049d13-42ca-47e7-a576-a2dc0afc8c8b)
+![Banner](https://github.com/user-attachments/assets/9c049d13-42ca-47e7-a576-a2dc0afc8c8b)
 
-[中文](README_cn.md)
+> **NavigationKit is a modular Swift framework providing location services, map rendering, and navigation-related algorithms.**
+> Built with `CoreLocation`, `MapKit`, `Combine`, and a plug-in architecture for advanced navigation computation.
 
-> **🚏 This guide summarizes the usage of `CoreLocationKit` (location services) and `AppleMapKit` (map rendering & navigation) for iOS & macOS development.**
-
-> **🚨 Warning: Currently, I'm quite busy, so I haven't fully tested it. There might be many bugs. Use with caution!**
-
-> **🔧 Installation: Use Swift Package Manager (SPM) for integration**  
+> ⚠️ **Still under development — use with caution, bugs are expected.**
 
 ---
 
-## 📍 CoreLocationKit - Location Management
+# 📦 Module Overview
 
-`CoreLocationKit` is an SDK that encapsulates the `CoreLocation` framework, providing functionalities such as **location tracking, heading updates, and reverse geocoding**.
+NavigationKit consists of **three major layers**:
 
-### 1️⃣ Initialize `CoreLocationKit`
-
-`CoreLocationKit` uses a **singleton pattern**, so you can use it directly:
-```swift
-let locationManager = CoreLocationKit.shared
+```
+NavigationKit        ← Public API
+├── CoreLocationKit  ← GPS / heading / elevation (raw sensors)
+├── AppleMapKit      ← Map rendering & routing
+└── NavigationCoreKit← Algorithms (elevation, filtering, geo distance…)
 ```
 
 ---
 
-### 2️⃣ Subscribe to Location Updates (Continuous Tracking)
+# 📍 CoreLocationKit  
+**Unified access to GPS, speed, heading, altitude & reverse geocoding**
 
-Use `Combine` to listen for **real-time location updates**:
+### 🔹 Subscribe to Continuous GPS Updates
 ```swift
-import Combine
-
-var cancellable: AnyCancellable?
-
-cancellable = CoreLocationKit.shared.locationPublisher
+CoreLocationKit.shared.locationPublisher
     .sink { location in
-        if let location = location {
-            print("Current location: \(location.coordinate.latitude), \(location.coordinate.longitude)")
-        } else {
-            print("Unable to get location")
-        }
+        print("lat:", location?.coordinate.latitude ?? 0)
     }
 ```
 
----
-
-### 3️⃣ Get Current Location (One-time Request)
-
-If you **only need the location once**, use:
+### 🔹 Request One-Time Location
 ```swift
 CoreLocationKit.shared.requestCurrentLocation()
 ```
-Then listen for `locationPublisher`:
+
+### 🔹 Speed (m/s)
 ```swift
-cancellable = CoreLocationKit.shared.locationPublisher
-    .compactMap { $0 }
-    .sink { location in
-        print("Current location: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+CoreLocationKit.shared.speedPublisher
+    .sink { speed in
+        print("speed:", speed)
     }
 ```
 
----
-
-### 4️⃣ Listen to Authorization Status
-
-Monitor **changes in location authorization**:
+### 🔹 Altitude (meters)
 ```swift
-cancellable = CoreLocationKit.shared.authorizationStatusPublisher
-    .sink { status in
-        print("Current location authorization status: \(status.rawValue)")
+CoreLocationKit.shared.altitudePublisher
+    .sink { alt in
+        print("altitude:", alt)
     }
 ```
 
----
-
-### 5️⃣ Monitor Device Heading (Compass)
-
-Listen for **device heading updates**:
+### 🔹 Heading (degrees)
 ```swift
-cancellable = CoreLocationKit.shared.headingPublisher
+CoreLocationKit.shared.headingPublisher
     .sink { heading in
-        if let heading = heading {
-            print("Current heading: \(heading.trueHeading)")
-        } else {
-            print("Unable to get heading data")
-        }
+        print("heading:", heading?.trueHeading ?? 0)
     }
 ```
 
----
-
-### 6️⃣ Retrieve Address from Current Location (Reverse Geocoding)
-
-Get the **address** of the current location:
+### 🔹 Reverse Geocoding
 ```swift
-cancellable = CoreLocationKit.shared.addressPublisher
-    .sink(receiveCompletion: { completion in
-        if case .failure(let error) = completion {
-            print("Failed to retrieve address: \(error)")
-        }
-    }, receiveValue: { address in
-        print("Current address: \(address)")
-    })
+CoreLocationKit.shared.addressPublisher
+    .sink(receiveValue: { print($0) })
 ```
 
 ---
 
-### 7️⃣ Enable Background Location Updates
+# 🗺 AppleMapKit  
+Minimal wrapper around `MKMapView`.
 
-Enable **background location tracking** (disabled by default):
+### 🔹 Use in SwiftUI
 ```swift
-CoreLocationKit.shared.allowBackgroundLocationUpdates(true)
-```
-
----
-
-## 🗺 AppleMapKit - Map Management
-
-`AppleMapKit` is a wrapper around `MKMapView`, providing map rendering, annotations, and navigation features.
-
-### 1️⃣ Initialize `AppleMapKit`
-```swift
-let appleMap = AppleMapKit()
-```
-
----
-
-### 2️⃣ Use `AppleMapKit` in `UIKit`
-```swift
-import UIKit
-
-class MapViewController: UIViewController {
-    private let appleMap = AppleMapKit()
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        appleMap.mapView.frame = view.bounds
-        view.addSubview(appleMap.mapView)
-    }
-}
-```
-
----
-
-### 3️⃣ Use `AppleMapKit` in `SwiftUI`
-`AppleMapKit` needs to be **wrapped in `UIViewRepresentable`** to work in `SwiftUI`:
-```swift
-import SwiftUI
-
 struct AppleMapView: UIViewRepresentable {
     func makeUIView(context: Context) -> MKMapView {
-        return AppleMapKit().mapView
+        AppleMapKit().mapView
     }
-
     func updateUIView(_ uiView: MKMapView, context: Context) {}
 }
-
-struct ContentView: View {
-    var body: some View {
-        AppleMapView()
-            .edgesIgnoringSafeArea(.all)  // ✅ Full-screen map
-    }
-}
 ```
 
----
-
-### 4️⃣ Set User Tracking Mode
+### 🔹 Add Annotations
 ```swift
-appleMap.setUserTrackingMode(.follow)
+appleMap.addAnnotations([
+    MultipleAnnotations(name: "A", location: .init(latitude: 37.7, longitude: -122.4))
+])
 ```
 
----
-
-### 5️⃣ Add Annotations (Multiple Locations)
+### 🔹 Draw a Route
 ```swift
-let annotations = [
-    MultipleAnnotations(name: "Store A", location: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194)),
-    MultipleAnnotations(name: "Store B", location: CLLocationCoordinate2D(latitude: 37.7849, longitude: -122.4094))
-]
-appleMap.addAnnotations(annotations)
+appleMap.drawRoute(from: start, to: destination)
 ```
 
 ---
 
-### 6️⃣ Draw Navigation Route
+# 🧠 NavigationCoreKit  
+**Algorithm layer for navigation logic**
+
+This module contains reusable **mathematical & geospatial tools**, independent from UI.
+
+## 1️⃣ ElevationKit  
+Tools for **elevation, slope calculation, smoothing, and statistics**.
+
+### 🔹 ElevationManager
+Processes altitude inputs and provides normalized elevation outputs.
+
+### 🔹 ElevationFilter
+Low-pass filtering to remove GPS altitude noise.
+
+### 🔹 GradientCalculator
+Computes slope (% or degrees) between two points.
+
 ```swift
-let startLocation = CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194)
-let destinationLocation = CLLocationCoordinate2D(latitude: 37.8044, longitude: -122.2711)
-appleMap.drawRoute(from: startLocation, to: destinationLocation)
+let gradient = GradientCalculator.slope(from: 120, to: 150, distance: 30)
+print("slope =", gradient)
 ```
-**⚠️ Note: This method will** **clear existing routes** **before drawing a new one.**
+
+### 🔹 ElevationStatistics
+Aggregate metrics for routes:
+
+- Ascent  
+- Descent  
+- Max / min altitude  
+- Average gradient  
 
 ---
 
-### 7️⃣ Set Custom Annotation Image (iOS Only)
+## 2️⃣ Speed Utilities
+- Speed filters  
+- Running average  
+- Motion smoothing  
+*(coming soon)*
+
+---
+
+## 3️⃣ Geo Distance (Haversine)
 ```swift
-#if canImport(UIKit)
-appleMap.customAnnotationImage = UIImage(named: "customPin")
-#endif
+let d = Haversine.distance(
+    from: CLLocationCoordinate2D(latitude: 25.0, longitude: 121.0),
+    to: CLLocationCoordinate2D(latitude: 25.01, longitude: 121.02)
+)
 ```
-**⚠️ Recommended image size: `21x31` pixels to avoid UI distortion.**
 
 ---
 
-## 🏃 Upcoming Features
-- [ ] **RouteKit / Route Recording / Path Planning**
-- [ ] **SyncKit / Multi-device Location Sync / Cloud Storage**
+# 🧩 Installation (SPM)
+```
+https://github.com/milleyin/NavigationKit.git
+```
+
+---
+
+# 📌 Notes
+- iOS ≥ 13, macOS ≥ 11  
+- Requires location permissions in Info.plist  
+- GPS altitude is noisy — ElevationFilter recommended  
+- Route drawing requires network (Apple routing service)
+
+---
+
+# 🏁 Summary
+
+NavigationKit gives you:
+
+### ✔ Real-time GPS, speed, heading, altitude  
+### ✔ Reverse geocoding  
+### ✔ Map rendering + routing  
+### ✔ Modular navigation algorithms (elevation, slope, distances)  
+### ✔ SwiftUI-friendly architecture  
+### ✔ Fully composable SPM modules  
+
