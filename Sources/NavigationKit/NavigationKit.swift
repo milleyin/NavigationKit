@@ -151,3 +151,45 @@ extension NavigationKit {
         print("Elevation pipeline stopped.")
     }
 }
+
+// MARK: - Speed
+extension NavigationKit {
+
+    /// 全局 SpeedManager
+    public static let speedManager = SpeedManager()
+
+    private static var speedSubscriptions: Set<AnyCancellable> = .init()
+    private static var isSpeedPipelineRunning = false
+
+    /**
+     启动默认速度管线，自动将 CoreLocationKit 的原始速度（m/s）
+     → 清洗 → 转换 → 滤波 → 死区处理 → speedKmh 输出。
+     
+     - Important: 调用一次即可，重复调用会被忽略。
+     */
+    public static func startDefaultSpeedPipeline() {
+        guard isSpeedPipelineRunning == false else { return }
+        isSpeedPipelineRunning = true
+
+        CoreLocationKit.shared.speedPublisher
+            .sink { rawSpeedMs in
+                speedManager.bindSpeedPublisher(
+                    Just(rawSpeedMs).eraseToAnyPublisher()
+                )
+            }
+            .store(in: &speedSubscriptions)
+    }
+
+    /**
+     停止速度管线，清理订阅并重置 SpeedManager 状态。
+     */
+    public static func stopSpeedPipeline() {
+        guard isSpeedPipelineRunning else { return }
+
+        speedSubscriptions.removeAll()
+        speedManager.reset()
+        isSpeedPipelineRunning = false
+
+        print("Speed pipeline stopped.")
+    }
+}
