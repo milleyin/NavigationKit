@@ -93,26 +93,7 @@ public struct RouteSummary: Sendable {
 
     // MARK: - 初始化
 
-    public init(
-        isValid: Bool,
-        pointCount: Int,
-        segmentCount: Int,
-        totalDistance: Double,
-        averageSpeed: Double,
-        maxSpeed: Double,
-        totalTime: Double,
-        movingTime: Double,
-        stoppedTime: Double,
-        totalElevationGain: Double,
-        totalElevationLoss: Double,
-        maxAltitude: Double,
-        minAltitude: Double,
-        maxGradient: Double,
-        minGradient: Double,
-        startPoint: GeoPoint?,
-        endPoint: GeoPoint?,
-        metadata: [String : String] = [:]
-    ) {
+    public init(isValid: Bool, pointCount: Int, segmentCount: Int, totalDistance: Double, averageSpeed: Double, maxSpeed: Double, totalTime: Double, movingTime: Double, stoppedTime: Double, totalElevationGain: Double, totalElevationLoss: Double, maxAltitude: Double, minAltitude: Double, maxGradient: Double, minGradient: Double, startPoint: GeoPoint?, endPoint: GeoPoint?, metadata: [String : String] = [:]) {
         self.isValid = isValid
         self.pointCount = pointCount
         self.segmentCount = segmentCount
