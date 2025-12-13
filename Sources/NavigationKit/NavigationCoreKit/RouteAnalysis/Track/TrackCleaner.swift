@@ -6,3 +6,13 @@
 //
 
 import Foundation
+
+public final class TrackCleaner {
+
+    public init() {}
+
+    /// 当前版本：直接返回原始点
+    public func clean(_ point: GeoPoint) -> GeoPoint {
+        return point
+    }
+}
