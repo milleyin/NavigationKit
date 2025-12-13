@@ -114,3 +114,27 @@ public struct RouteSummary: Sendable {
         self.metadata = metadata
     }
 }
+
+public extension RouteSummary {
+
+    static let empty = RouteSummary(
+        isValid: false,
+        pointCount: 0,
+        segmentCount: 0,
+        totalDistance: 0,
+        averageSpeed: 0,
+        maxSpeed: 0,
+        totalTime: 0,
+        movingTime: 0,
+        stoppedTime: 0,
+        totalElevationGain: 0,
+        totalElevationLoss: 0,
+        maxAltitude: 0,
+        minAltitude: 0,
+        maxGradient: 0,
+        minGradient: 0,
+        startPoint: nil,
+        endPoint: nil,
+        metadata: [:]
+    )
+}
