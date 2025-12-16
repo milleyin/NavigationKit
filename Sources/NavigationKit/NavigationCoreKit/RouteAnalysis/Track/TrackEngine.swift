@@ -65,6 +65,9 @@ public final class TrackEngine {
         /// 允许的最大合理速度（m/s）。超过该值可视为异常点（仅供 cleaner 参考）。
         public var maximumReasonableSpeed: Double = 80 // ~288 km/h，先给个保守上限
 
+        /// 允许的最大合理海拔突变（米）。超过该值可视为异常点（仅供 cleaner 参考）。
+        public var maximumAltitudeJump: Double = 200
+        
         public init() {}
     }
 
@@ -139,11 +142,11 @@ public final class TrackEngine {
     public init(config: Config = .init()) {
         self.config = config
 
-        self.cleaner = TrackCleaner(config: config)
-        self.smoother = TrackSmoother(config: config)
-        self.analyzer = TrackAnalyzer()
-        self.segmentAnalyzer = SegmentAnalyzer()
-        self.stopDetector = StopDetector(config: config)
+        self.cleaner = TrackCleaner(maximumReasonableSpeed: config.maximumReasonableSpeed, maximumAltitudeJump: config.maximumAltitudeJump, minimumTimeInterval: config.minimumTimeInterval)
+//        self.smoother = TrackSmoother(config: config)
+//        self.analyzer = TrackAnalyzer()
+//        self.segmentAnalyzer = SegmentAnalyzer()
+//        self.stopDetector = StopDetector(config: config)
     }
 
     // MARK: - Lifecycle
