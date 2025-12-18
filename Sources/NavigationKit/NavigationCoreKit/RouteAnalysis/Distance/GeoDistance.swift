@@ -79,6 +79,24 @@ public enum GeoDistance {
 
         return fmod((degrees + 360), 360)
     }
+    
+    // MARK: - Public Unified API
+
+    /**
+     计算两个地理点之间的水平距离（单位：米）。
+
+     - Important:
+       这是 RouteAnalysis 模块对外使用的**统一距离入口**，
+       内部当前使用 Haversine 实现，未来可无侵入升级为其他算法。
+
+     - Parameters:
+       - from: 起点
+       - to: 终点
+     - Returns: 距离（米）
+     */
+    public static func distance(from: GeoPoint, to: GeoPoint) -> Double {
+        haversine(from: from, to: to)
+    }
 
     // MARK: - Helpers
 

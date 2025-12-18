@@ -22,7 +22,7 @@ import CoreLocation
    `speed` 与 `course` 是可选字段，因为某些数据源（如 GPX 文件、KML
    或某些低功耗定位）可能不提供这两个值。
  */
-public struct GeoPoint: Sendable {
+public struct GeoPoint: Sendable, Equatable {
 
     // MARK: - 基本地理信息
     
