@@ -68,6 +68,9 @@ public final class TrackEngine {
         /// 允许的最大合理海拔突变（米）。超过该值可视为异常点（仅供 cleaner 参考）。
         public var maximumAltitudeJump: Double = 200
         
+        /// 平滑系数（0~1），越小越平滑
+        public var smootherAlpha: Double = 0.2
+        
         public init() {}
     }
 
@@ -143,10 +146,10 @@ public final class TrackEngine {
         self.config = config
 
         self.cleaner = TrackCleaner(maximumReasonableSpeed: config.maximumReasonableSpeed, maximumAltitudeJump: config.maximumAltitudeJump, minimumTimeInterval: config.minimumTimeInterval)
-//        self.smoother = TrackSmoother(config: config)
-//        self.analyzer = TrackAnalyzer()
-//        self.segmentAnalyzer = SegmentAnalyzer()
-//        self.stopDetector = StopDetector(config: config)
+        self.smoother = TrackSmoother(config: .init(alpha: config.smootherAlpha))
+        self.analyzer = TrackAnalyzer()
+        self.segmentAnalyzer = SegmentAnalyzer()
+        self.stopDetector = StopDetector(speedThreshold: config.stopSpeedThreshold, minimumDuration: config.stopMinimumDuration)
     }
 
     // MARK: - Lifecycle
@@ -253,7 +256,7 @@ public final class TrackEngine {
         pointsCount += 1
 
         // 4) Analyzer：更新 summary（距离/时间/速度/海拔等）
-        summary = analyzer.process(accepted, last: lastAcceptedPoint, current: summary)
+        summary = analyzer.process(accepted, last: lastAcceptedPoint, summary: summary)
 
         // 5) SegmentAnalyzer：更新 segments（先占位，后续丰富）
         segments = segmentAnalyzer.process(accepted, last: lastAcceptedPoint, segments: segments)
