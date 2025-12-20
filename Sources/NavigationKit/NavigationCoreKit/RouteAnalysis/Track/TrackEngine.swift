@@ -8,20 +8,24 @@
 import Foundation
 
 /**
- `TrackEngine` 是 RouteAnalysis 的“轨迹计算总控引擎”。
+ - Important:
+     `TrackEngine` 是 RouteAnalysis 的“轨迹计算总控引擎”。它只负责 **算法编排** 与 **结果汇总**，不负责任何设备数据采集（如 CoreLocation / MapKit）。
+ 
+ - Important:
+     `TrackEngine` 必须保持“纯算法”，不依赖 UI 或系统环境，以确保 **可单元测试、可回放、可复现**。
 
- 它只负责**算法编排**与**结果汇总**，不负责任何设备数据采集（例如 CoreLocation 或 MapKit）。
- 你只需要把应用层/数据层产生的 `GeoPoint` 输入进来，`TrackEngine` 将按既定流水线：
+ - SeeAlso:
+   1. 清洗（`TrackCleaner`）—— 剔除异常点、重复点、时间倒退点
+   2. 平滑（`TrackSmoother`，可选）—— 对轨迹做滤波
+   3. 分析（`TrackAnalyzer`）—— 距离、时间、速度统计
+   4. 分段（`SegmentAnalyzer`）—— 坡段、速度段切分
+   5. 停车（`StopDetector`）—— 停车点识别
+   6. 汇总（`RouteSummary`）—— 输出统一轨迹摘要
 
- 1. 清洗（`TrackCleaner`）——剔除异常点、重复点、时间倒退点等
- 2. 平滑（`TrackSmoother`，可选）——对轨迹做滤波
- 3. 分析（`TrackAnalyzer`）——累计距离、时间、最大速度、平均速度等
- 4. 分段（`SegmentAnalyzer`）——切分坡段、速度段等
- 5. 停车（`StopDetector`）——识别停车点
- 6. 汇总（`RouteSummary`）——输出统一的轨迹摘要结果
-
- - Important: `TrackEngine` 必须保持“纯算法”，不依赖 UI 或系统环境，确保可单测与可回放。
- - Note: `TrackEngine` 设计为同步处理：输入确定、输出确定。多线程/异步由上层自行决定。
+ - Note:
+     该引擎为 **同步处理模型**：
+     输入确定 → 输出确定。
+     并发 / 异步调度由上层负责。
  */
 public final class TrackEngine {
 
@@ -174,7 +178,7 @@ public final class TrackEngine {
      结束轨迹处理流程。
 
      - Important: `finish()` 会将引擎状态置为 `finished`，之后默认不再接收新点。
-     - Note: 如果你仍希望继续追加点，可以再次调用 `start()` 进入 `running`。
+     - Note: 如果仍希望继续追加点，可以再次调用 `start()` 进入 `running`。
      - Postcondition: `state == .finished`
      */
     public func finish() {
@@ -257,14 +261,14 @@ public final class TrackEngine {
         // 5) SegmentAnalyzer：生成/追加 segments
         segments = segmentAnalyzer.process(accepted, last: lastAcceptedPoint, segments: segments)
 
-        // ✅ 6) 把 SegmentAnalyzer 的结果“喂回 TrackAnalyzer”（回写 summary）
+        // 6) 把 SegmentAnalyzer 的结果“喂回 TrackAnalyzer”（回写 summary）
         summary = applySegmentsBackToSummary(
             summary: summary,
             latestPoint: accepted,
             segments: segments
         )
 
-        // ✅ 7) StopDetector：统一由 StopDetector 处理停车逻辑
+        // 7) StopDetector：统一由 StopDetector 处理停车逻辑
         stops = stopDetector.process(
             accepted,
             last: lastAcceptedPoint,
@@ -297,12 +301,11 @@ private extension TrackEngine {
      - Important:
        目前 `TrackAnalyzer` 仍然是“点驱动”的统计，
        但分段信息（坡度、海拔增益等）天然更适合基于 segment 汇总。
-       所以我们在 TrackEngine 做一个“桥接回写”，让链路闭环先跑起来。
+       所以在 TrackEngine 做一个“桥接回写”，让链路闭环先跑起来。
 
      - Note:
        这是首版策略：简单可用、便于单测。
-       后续你如果决定把这些统计逻辑正式挪进 TrackAnalyzer（或新建 TrackSummaryAnalyzer），
-       这里只需要替换掉即可。
+       后续如果决定把这些统计逻辑正式挪进 TrackAnalyzer（或新建 TrackSummaryAnalyzer），这里只需要替换掉即可。
      */
     private func applySegmentsBackToSummary(summary: RouteSummary,latestPoint: GeoPoint,segments: [RouteSegment]) -> RouteSummary {
 

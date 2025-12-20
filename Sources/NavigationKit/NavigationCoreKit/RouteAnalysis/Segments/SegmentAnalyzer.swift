@@ -33,11 +33,7 @@ public final class SegmentAnalyzer {
        - segments: 当前已有段落数组
      - Returns: 更新后的段落数组
      */
-    public func process(
-        _ current: GeoPoint,
-        last: GeoPoint?,
-        segments: [RouteSegment]
-    ) -> [RouteSegment] {
+    public func process(_ current: GeoPoint, last: GeoPoint?, segments: [RouteSegment]) -> [RouteSegment] {
 
         guard let last = last else {
             return segments
@@ -48,25 +44,25 @@ public final class SegmentAnalyzer {
             return segments
         }
 
-        // 1️⃣ 距离
+        // 距离
         let distance = GeoDistance.haversine(from: last, to: current)
         guard distance.isFinite, distance >= minimumDistance else {
             return segments
         }
 
-        // 2️⃣ 海拔变化
+        // 海拔变化
         let elevationDelta = current.altitude - last.altitude
 
-        // 3️⃣ 平均速度
+        // 平均速度
         let averageSpeed = distance / deltaTime
 
-        // 4️⃣ 坡度（百分比）
+        // 坡度（百分比）
         let gradient: Double = {
             guard distance > 0 else { return 0 }
             return (elevationDelta / distance) * 100
         }()
 
-        // 5️⃣ 坡段分类（接入 SlopeClassifier）
+        // 坡段分类（接入 SlopeClassifier）
         let slopeType = SlopeClassifier.classify(gradient: gradient)
 
         let segment = RouteSegment(

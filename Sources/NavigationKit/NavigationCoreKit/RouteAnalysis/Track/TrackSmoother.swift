@@ -102,7 +102,7 @@ public final class TrackSmoother {
 
         let course: Double?
         if let cur = point.course, let prev = last.course {
-            // 航向角暂不做环绕处理（V1 保守）
+            // 航向角暂不做环绕处理（V1 保守处理）
             course = smooth(cur, prev)
         } else {
             course = point.course

@@ -41,7 +41,6 @@ public final class TrackCleaner {
      初始化 `TrackCleaner`。
 
      - Important:
-       这里不再定义 `TrackCleaner.Config`，避免与 `TrackEngine.Config` 职责重叠。
        所有策略参数统一由上层（例如 TrackEngine）注入。
 
      - Parameters:
