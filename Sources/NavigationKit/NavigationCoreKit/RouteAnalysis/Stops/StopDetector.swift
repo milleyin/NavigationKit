@@ -40,10 +40,7 @@ public final class StopDetector {
        - speedThreshold: 停车速度阈值（m/s）
        - minimumDuration: 最小停车持续时间（秒）
      */
-    public init(
-        speedThreshold: Double,
-        minimumDuration: TimeInterval
-    ) {
+    public init(speedThreshold: Double, minimumDuration: TimeInterval) {
         self.speedThreshold = speedThreshold
         self.minimumDuration = minimumDuration
     }
@@ -59,15 +56,11 @@ public final class StopDetector {
        - stops: 当前已识别的停车事件
      - Returns: 更新后的停车事件数组
      */
-    public func process(
-        _ point: GeoPoint,
-        last: GeoPoint?,
-        stops: [TrackEngine.StopEvent]
-    ) -> [TrackEngine.StopEvent] {
+    public func process(_ point: GeoPoint, last: GeoPoint?, stops: [TrackEngine.StopEvent]) -> [TrackEngine.StopEvent] {
 
         let speed = max(0, point.speed ?? 0)
 
-        // 1️⃣ 低速 → 可能停车
+        // 低速 → 可能停车
         if speed <= speedThreshold {
             if pendingStart == nil {
                 pendingStart = point
@@ -75,7 +68,7 @@ public final class StopDetector {
             return stops
         }
 
-        // 2️⃣ 高速 → 结束停车
+        // 高速 → 结束停车
         if let start = pendingStart {
             let end = point
             let duration = end.timestamp.timeIntervalSince(start.timestamp)

@@ -37,11 +37,7 @@ public final class TrackAnalyzer {
      
      - Returns: 新的 `RouteSummary`
      */
-    public func process(
-        _ current: GeoPoint,
-        last: GeoPoint?,
-        summary: RouteSummary
-    ) -> RouteSummary {
+    public func process(_ current: GeoPoint, last: GeoPoint?, summary: RouteSummary) -> RouteSummary {
 
         // MARK: - 点数
         let newPointCount = summary.pointCount + 1

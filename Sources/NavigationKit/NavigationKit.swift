@@ -13,7 +13,7 @@ import NavigationCoreKit
 
 public enum NavigationKit {
     /// NavigationKit 版本号
-    public static let version: String = "1.4.0(2025034)"
+    public static let version: String = "1.4.0(2025041)"
 }
 
 //MARK: - Elevation
