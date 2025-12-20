@@ -67,20 +67,17 @@ public final class TrackEngine {
 
         /// 允许的最大合理海拔突变（米）。超过该值可视为异常点（仅供 cleaner 参考）。
         public var maximumAltitudeJump: Double = 200
-        
+
         /// 平滑系数（0~1），越小越平滑
         public var smootherAlpha: Double = 0.2
-        
+
         public init() {}
     }
 
     /**
-     停车事件（最小模型）。
-
-     - Important: 后续你可以将其替换为更完整的 Stop 模型，
-       或把它移动到 Stops 模块单独定义。
+     停车事件（最小模型）
      */
-    public struct StopEvent: Equatable, Sendable {
+    public struct StopEvent: Sendable, Equatable {
 
         /// 停车起始点（含坐标与时间）
         public let start: GeoPoint
@@ -131,9 +128,6 @@ public final class TrackEngine {
     /// 最近一次“进入引擎流水线”的有效点
     private var lastAcceptedPoint: GeoPoint?
 
-    /// StopDetector 的内部状态（最小实现：由 TrackEngine 暂存）
-    private var pendingStopStart: GeoPoint?
-
     // MARK: - Init
 
     /**
@@ -145,15 +139,25 @@ public final class TrackEngine {
     public init(config: Config = .init()) {
         self.config = config
 
-        self.cleaner = TrackCleaner(maximumReasonableSpeed: config.maximumReasonableSpeed, maximumAltitudeJump: config.maximumAltitudeJump, minimumTimeInterval: config.minimumTimeInterval)
+        self.cleaner = TrackCleaner(
+            maximumReasonableSpeed: config.maximumReasonableSpeed,
+            maximumAltitudeJump: config.maximumAltitudeJump,
+            minimumTimeInterval: config.minimumTimeInterval
+        )
+
         self.smoother = TrackSmoother(config: .init(alpha: config.smootherAlpha))
+
         self.analyzer = TrackAnalyzer()
         self.segmentAnalyzer = SegmentAnalyzer()
-        self.stopDetector = StopDetector(speedThreshold: config.stopSpeedThreshold, minimumDuration: config.stopMinimumDuration)
+
+        /// ✅ StopDetector 统一在这里初始化（以后想换策略就改 config）
+        self.stopDetector = StopDetector(
+            speedThreshold: config.stopSpeedThreshold,
+            minimumDuration: config.stopMinimumDuration
+        )
     }
 
     // MARK: - Lifecycle
-
     /**
      启动引擎，进入 `running` 状态，准备接收轨迹点。
 
@@ -166,7 +170,6 @@ public final class TrackEngine {
         if state == .idle { state = .running }
         if state == .finished { state = .running }
     }
-
     /**
      结束轨迹处理流程。
 
@@ -177,18 +180,14 @@ public final class TrackEngine {
     public func finish() {
         guard state != .finished else { return }
 
-        // 如果存在 pending stop（低速开始但未结束），这里可以按需关闭。
-        if let start = pendingStopStart, let end = lastAcceptedPoint {
-            let event = StopEvent(start: start, end: end)
-            if event.duration >= config.stopMinimumDuration {
-                stops.append(event)
-            }
-        }
-        pendingStopStart = nil
+        /// ✅ 统一由 StopDetector 收尾 pending stop
+        stops = stopDetector.finish(
+            stops: stops,
+            lastPoint: lastAcceptedPoint
+        )
 
         state = .finished
     }
-
     /**
      重置引擎到初始状态。
 
@@ -210,7 +209,6 @@ public final class TrackEngine {
         stops.removeAll()
 
         lastAcceptedPoint = nil
-        pendingStopStart = nil
 
         cleaner.reset()
         smoother.reset()
@@ -220,7 +218,6 @@ public final class TrackEngine {
     }
 
     // MARK: - Input
-
     /**
      追加一个轨迹点（实时录制场景的主要入口）。
 
@@ -230,7 +227,6 @@ public final class TrackEngine {
        2. 该方法是同步处理：调用结束后，`summary/segments/stops` 均为最新状态。
 
      - Warning: 若 `state != .running`，该方法默认不会处理输入点（避免误写入）。
-       若你希望在 `idle` 也能自动 start，可在应用层自行决定调用 `start()`。
 
      - Parameter point: 轨迹点（建议包含 timestamp、coordinate、altitude、speed 等）。
      */
@@ -255,18 +251,28 @@ public final class TrackEngine {
         // 3) 更新内部状态
         pointsCount += 1
 
-        // 4) Analyzer：更新 summary（距离/时间/速度/海拔等）
+        // 4) Analyzer：先更新基础 summary（距离/时间/速度等）
         summary = analyzer.process(accepted, last: lastAcceptedPoint, summary: summary)
 
-        // 5) SegmentAnalyzer：更新 segments（先占位，后续丰富）
+        // 5) SegmentAnalyzer：生成/追加 segments
         segments = segmentAnalyzer.process(accepted, last: lastAcceptedPoint, segments: segments)
 
-        // 6) StopDetector：更新 stops（先做一个最小逻辑，后续可替换为 StopDetector 完整实现）
-        updateStopsIfNeeded(point: accepted, last: lastAcceptedPoint)
+        // ✅ 6) 把 SegmentAnalyzer 的结果“喂回 TrackAnalyzer”（回写 summary）
+        summary = applySegmentsBackToSummary(
+            summary: summary,
+            latestPoint: accepted,
+            segments: segments
+        )
+
+        // ✅ 7) StopDetector：统一由 StopDetector 处理停车逻辑
+        stops = stopDetector.process(
+            accepted,
+            last: lastAcceptedPoint,
+            stops: stops
+        )
 
         lastAcceptedPoint = accepted
     }
-
     /**
      批量处理轨迹点（回放/导入场景）。
 
@@ -279,35 +285,86 @@ public final class TrackEngine {
             append(p)
         }
     }
+}
 
-    // MARK: - Stops (Minimal Implementation)
+// MARK: - Segment → Summary Bridge
+
+private extension TrackEngine {
 
     /**
-     最小停车识别逻辑（先让 Traveller 能用）。
+     将 SegmentAnalyzer 产物回写到 RouteSummary。
 
-     判定规则：
-     - 当速度 <= `stopSpeedThreshold` 时进入“可能停车”状态，记录 start 点；
-     - 当速度 > `stopSpeedThreshold` 时结束停车，生成 StopEvent；
-     - 只有 `duration >= stopMinimumDuration` 才会记录到 `stops`。
+     - Important:
+       目前 `TrackAnalyzer` 仍然是“点驱动”的统计，
+       但分段信息（坡度、海拔增益等）天然更适合基于 segment 汇总。
+       所以我们在 TrackEngine 做一个“桥接回写”，让链路闭环先跑起来。
 
-     - Note: 这里的速度单位为 m/s，符合你“原始值保持 SI”的原则。
+     - Note:
+       这是首版策略：简单可用、便于单测。
+       后续你如果决定把这些统计逻辑正式挪进 TrackAnalyzer（或新建 TrackSummaryAnalyzer），
+       这里只需要替换掉即可。
      */
-    private func updateStopsIfNeeded(point: GeoPoint, last: GeoPoint?) {
-        let speed = max(0, point.speed ?? 0)
+    private func applySegmentsBackToSummary(summary: RouteSummary,latestPoint: GeoPoint,segments: [RouteSegment]) -> RouteSummary {
 
-        if speed <= config.stopSpeedThreshold {
-            if pendingStopStart == nil {
-                pendingStopStart = point
-            }
+        // segmentCount
+        let segmentCount = segments.count
+
+        // elevation gain / loss
+        var gain: Double = 0
+        var loss: Double = 0
+
+        // gradient stats
+        var maxG: Double
+        var minG: Double
+
+        if segments.isEmpty {
+            // 没有 segment，继承旧值（首点 / 异常情况）
+            maxG = summary.maxGradient
+            minG = summary.minGradient
         } else {
-            if let start = pendingStopStart {
-                let end = point
-                let event = StopEvent(start: start, end: end)
-                if event.duration >= config.stopMinimumDuration {
-                    stops.append(event)
-                }
-                pendingStopStart = nil
-            }
+            // 由 segments 自身决定
+            maxG = -Double.greatestFiniteMagnitude
+            minG =  Double.greatestFiniteMagnitude
         }
+
+        for s in segments {
+            if s.elevationDelta > 0 { gain += s.elevationDelta }
+            if s.elevationDelta < 0 { loss += abs(s.elevationDelta) }
+
+            maxG = max(maxG, s.gradient)
+            minG = min(minG, s.gradient)
+        }
+
+        // max/min altitude（点驱动，增量更新）
+        let maxAlt: Double
+        let minAlt: Double
+        if summary.pointCount <= 1 {
+            maxAlt = latestPoint.altitude
+            minAlt = latestPoint.altitude
+        } else {
+            maxAlt = max(summary.maxAltitude, latestPoint.altitude)
+            minAlt = min(summary.minAltitude, latestPoint.altitude)
+        }
+
+        return RouteSummary(
+            isValid: summary.isValid,
+            pointCount: summary.pointCount,
+            segmentCount: segmentCount,
+            totalDistance: summary.totalDistance,
+            averageSpeed: summary.averageSpeed,
+            maxSpeed: summary.maxSpeed,
+            totalTime: summary.totalTime,
+            movingTime: summary.movingTime,
+            stoppedTime: summary.stoppedTime,
+            totalElevationGain: gain,
+            totalElevationLoss: loss,
+            maxAltitude: maxAlt,
+            minAltitude: minAlt,
+            maxGradient: maxG,
+            minGradient: minG,
+            startPoint: summary.startPoint,
+            endPoint: summary.endPoint,
+            metadata: summary.metadata
+        )
     }
 }
