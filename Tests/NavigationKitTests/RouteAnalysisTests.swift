@@ -335,3 +335,123 @@ extension RouteAnalysisTests {
         XCTAssertTrue(engine.summary.totalDistance > 0)
     }
 }
+
+extension RouteAnalysisTests {
+
+    // MARK: - 21. Cleaner：时间过密点被丢弃
+
+    func testCleanerDropsTooDensePoints() {
+        let cleaner = TrackCleaner(
+            maximumReasonableSpeed: 50,
+            maximumAltitudeJump: 100,
+            minimumTimeInterval: 1.0
+        )
+
+        let p1 = makePoint(lat: 0, lon: 0, alt: 0, time: 0)
+        let p2 = makePoint(lat: 0, lon: 0.0001, alt: 0, time: 0.2)
+
+        let accepted1 = cleaner.process(p1, last: nil)
+        let accepted2 = cleaner.process(p2, last: accepted1)
+
+        XCTAssertNotNil(accepted1)
+        XCTAssertNil(accepted2)
+    }
+
+    // MARK: - 22. Cleaner：异常速度点被丢弃
+
+    func testCleanerDropsUnreasonableSpeed() {
+        let cleaner = TrackCleaner(
+            maximumReasonableSpeed: 10, // 很低的阈值
+            maximumAltitudeJump: 100,
+            minimumTimeInterval: 1
+        )
+
+        let p1 = makePoint(lat: 0, lon: 0, alt: 0, time: 0)
+        let p2 = makePoint(lat: 0, lon: 1.0, alt: 0, time: 1) // 极远
+
+        let accepted1 = cleaner.process(p1, last: nil)
+        let accepted2 = cleaner.process(p2, last: accepted1)
+
+        XCTAssertNotNil(accepted1)
+        XCTAssertNil(accepted2)
+    }
+
+    // MARK: - 23. TrackEngine：关闭 Cleaner 仍可正常工作
+
+    func testEngineWorksWithCleanerDisabled() {
+        var config = TrackEngine.Config()
+        config.enableCleaner = false
+
+        let engine = TrackEngine(config: config)
+        engine.start()
+
+        let p1 = makePoint(lat: 0, lon: 0, alt: 0, time: 0)
+        let p2 = makePoint(lat: 0, lon: 0.001, alt: 0, time: 10)
+
+        engine.append(p1)
+        engine.append(p2)
+
+        XCTAssertEqual(engine.pointsCount, 2)
+        XCTAssertEqual(engine.segments.count, 1)
+    }
+
+    // MARK: - 24. TrackEngine：关闭 Smoother 不影响输出数量
+
+    func testEngineWithoutSmootherProducesSamePointCount() {
+        var config = TrackEngine.Config()
+        config.enableSmoother = false
+
+        let engine = TrackEngine(config: config)
+        engine.start()
+
+        let points = [
+            makePoint(lat: 0, lon: 0, alt: 0, time: 0),
+            makePoint(lat: 0, lon: 0.001, alt: 0, time: 10),
+            makePoint(lat: 0, lon: 0.002, alt: 0, time: 20)
+        ]
+
+        points.forEach { engine.append($0) }
+
+        XCTAssertEqual(engine.pointsCount, 3)
+        XCTAssertEqual(engine.segments.count, 2)
+    }
+
+    // MARK: - 25. Smoother：alpha = 0 强制平滑到前一个点
+
+    func testSmootherAlphaZeroFreezesValues() {
+        let smoother = TrackSmoother(config: .init(alpha: 0))
+
+        let last = makePoint(lat: 1, lon: 1, alt: 100, time: 0)
+        let current = makePoint(lat: 10, lon: 10, alt: 1000, time: 10)
+
+        let smoothed = smoother.process(current, last: last)
+
+        XCTAssertEqual(smoothed.latitude, last.latitude)
+        XCTAssertEqual(smoothed.longitude, last.longitude)
+        XCTAssertEqual(smoothed.altitude, last.altitude)
+    }
+
+    // MARK: - 26. 空轨迹 finish 不产生 StopEvent
+
+    func testFinishWithNoPointsProducesNoStops() {
+        let engine = TrackEngine()
+        engine.start()
+        engine.finish()
+
+        XCTAssertTrue(engine.stops.isEmpty)
+    }
+
+    // MARK: - 27. 单点轨迹：summary 不 valid，但系统不崩
+
+    func testSinglePointTrackIsInvalidButStable() {
+        let engine = TrackEngine()
+        engine.start()
+
+        let p = makePoint(lat: 0, lon: 0, alt: 0, time: 0)
+        engine.append(p)
+
+        XCTAssertEqual(engine.pointsCount, 1)
+        XCTAssertFalse(engine.summary.isValid)
+        XCTAssertEqual(engine.segments.count, 0)
+    }
+}
