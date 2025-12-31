@@ -21,8 +21,13 @@ public final class TrackAnalyzer {
 
     /// 判定“有效轨迹”的最小点数
     private let minimumValidPointCount: Int = 2
+    
+    /// 判定移动的最小速度阈值（m/s），低于此值计入静止时间
+    private let movingSpeedThreshold: Double
 
-    public init() {}
+    public init(movingSpeedThreshold: Double = 0.5) {
+            self.movingSpeedThreshold = movingSpeedThreshold
+        }
 
     /// 重置接口（预留，当前无内部状态）
     public func reset() {}
@@ -57,7 +62,12 @@ public final class TrackAnalyzer {
                 totalTime += deltaTime
 
                 let speed = max(current.speed ?? 0, 0)
-                if speed > 0.5 {   // 0.5 m/s 作为“移动阈值”（≈ 1.8 km/h）
+//                if speed > 0.5 {   // 0.5 m/s 作为“移动阈值”（≈ 1.8 km/h）
+//                    movingTime += deltaTime
+//                } else {
+//                    stoppedTime += deltaTime
+//                }
+                if speed > movingSpeedThreshold {
                     movingTime += deltaTime
                 } else {
                     stoppedTime += deltaTime
