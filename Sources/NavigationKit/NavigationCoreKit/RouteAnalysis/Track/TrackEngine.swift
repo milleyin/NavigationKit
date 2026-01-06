@@ -14,6 +14,11 @@ import Foundation
  - Important:
      `TrackEngine` 必须保持“纯算法”，不依赖 UI 或系统环境，以确保 **可单元测试、可回放、可复现**。
 
+ - Optimization:
+     v2.0 进行了性能重构：
+     采用 **增量更新 (Incremental Update)** 策略替代了全量遍历。
+     现在 `append` 操作的时间复杂度稳定在 **O(1)**，彻底解决了长轨迹录制时的性能下降问题。
+
  - SeeAlso:
    1. 清洗（`TrackCleaner`）—— 剔除异常点、重复点、时间倒退点
    2. 平滑（`TrackSmoother`，可选）—— 对轨迹做滤波
@@ -111,10 +116,10 @@ public final class TrackEngine {
     /// 最近一次处理后的轨迹摘要。
     public private(set) var summary: RouteSummary = .empty
 
-    /// 分段结果（后续 SegmentAnalyzer 实现后会逐步丰富）。
+    /// 分段结果（v2.0 改为增量追加）。
     public private(set) var segments: [RouteSegment] = []
 
-    /// 停车事件列表（后续 StopDetector 实现后会逐步丰富）。
+    /// 停车事件列表。
     public private(set) var stops: [StopEvent] = []
 
     // MARK: - Dependencies (Algorithm Modules)
@@ -162,6 +167,7 @@ public final class TrackEngine {
     }
 
     // MARK: - Lifecycle
+    
     /**
      启动引擎，进入 `running` 状态，准备接收轨迹点。
 
@@ -174,6 +180,7 @@ public final class TrackEngine {
         if state == .idle { state = .running }
         if state == .finished { state = .running }
     }
+    
     /**
      结束轨迹处理流程。
 
@@ -192,6 +199,7 @@ public final class TrackEngine {
 
         state = .finished
     }
+    
     /**
      重置引擎到初始状态。
 
@@ -222,6 +230,7 @@ public final class TrackEngine {
     }
 
     // MARK: - Input
+    
     /**
      追加一个轨迹点（实时录制场景的主要入口）。
 
@@ -229,6 +238,7 @@ public final class TrackEngine {
        1. 该方法只接受 `GeoPoint`，不关心数据来源；
           应用层可来自 CoreLocation、文件回放、网络同步等。
        2. 该方法是同步处理：调用结束后，`summary/segments/stops` 均为最新状态。
+       3. v2.0 优化：执行 O(1) 复杂度的增量更新。
 
      - Warning: 若 `state != .running`，该方法默认不会处理输入点（避免误写入）。
 
@@ -255,18 +265,22 @@ public final class TrackEngine {
         // 3) 更新内部状态
         pointsCount += 1
 
-        // 4) Analyzer：先更新基础 summary（距离/时间/速度等）
+        // 4) Analyzer：更新基础 summary（距离/时间/速度等）
         summary = analyzer.process(accepted, last: lastAcceptedPoint, summary: summary)
+        
+        // 5) Altitude Stats：点驱动，增量更新海拔极值
+        summary = updateSummaryAltitude(summary: summary, point: accepted)
 
-        // 5) SegmentAnalyzer：生成/追加 segments
-        segments = segmentAnalyzer.process(accepted, last: lastAcceptedPoint, segments: segments)
-
-        // 6) 把 SegmentAnalyzer 的结果“喂回 TrackAnalyzer”（回写 summary）
-        summary = applySegmentsBackToSummary(
-            summary: summary,
-            latestPoint: accepted,
-            segments: segments
-        )
+        // 6) SegmentAnalyzer：尝试生成新段落 (O(1))
+        // v2.0 Change: 接收 RouteSegment? 而非数组
+        if let newSegment = segmentAnalyzer.process(accepted, last: lastAcceptedPoint) {
+            
+            // a. 存入列表
+            segments.append(newSegment)
+            
+            // b. 增量更新 Summary (爬升、坡度等) (O(1))
+            summary = updateSummaryWithSegment(summary: summary, segment: newSegment)
+        }
 
         // 7) StopDetector：统一由 StopDetector 处理停车逻辑
         stops = stopDetector.process(
@@ -277,6 +291,7 @@ public final class TrackEngine {
 
         lastAcceptedPoint = accepted
     }
+    
     /**
      批量处理轨迹点（回放/导入场景）。
 
@@ -291,68 +306,43 @@ public final class TrackEngine {
     }
 }
 
-// MARK: - Segment → Summary Bridge
+// MARK: - Incremental Update Helpers (Private)
 
 private extension TrackEngine {
 
     /**
-     将 SegmentAnalyzer 产物回写到 RouteSummary。
-
-     - Important:
-       目前 `TrackAnalyzer` 仍然是“点驱动”的统计，
-       但分段信息（坡度、海拔增益等）天然更适合基于 segment 汇总。
-       所以在 TrackEngine 做一个“桥接回写”，让链路闭环先跑起来。
-
-     - Note:
-       这是首版策略：简单可用、便于单测。
-       后续如果决定把这些统计逻辑正式挪进 TrackAnalyzer（或新建 TrackSummaryAnalyzer），这里只需要替换掉即可。
+     [O(1)] 增量更新：根据新生成的 Segment 更新统计信息（爬升、坡度）。
      */
-    private func applySegmentsBackToSummary(summary: RouteSummary,latestPoint: GeoPoint,segments: [RouteSegment]) -> RouteSummary {
-
-        // segmentCount
-        let segmentCount = segments.count
-
-        // elevation gain / loss
-        var gain: Double = 0
-        var loss: Double = 0
-
-        // gradient stats
-        var maxG: Double
-        var minG: Double
-
-        if segments.isEmpty {
-            // 没有 segment，继承旧值（首点 / 异常情况）
-            maxG = summary.maxGradient
-            minG = summary.minGradient
+    func updateSummaryWithSegment(summary: RouteSummary, segment: RouteSegment) -> RouteSummary {
+        
+        // 更新爬升/下降
+        var gain = summary.totalElevationGain
+        var loss = summary.totalElevationLoss
+        if segment.elevationDelta > 0 {
+            gain += segment.elevationDelta
         } else {
-            // 由 segments 自身决定
-            maxG = -Double.greatestFiniteMagnitude
-            minG =  Double.greatestFiniteMagnitude
+            loss += abs(segment.elevationDelta)
         }
-
-        for s in segments {
-            if s.elevationDelta > 0 { gain += s.elevationDelta }
-            if s.elevationDelta < 0 { loss += abs(s.elevationDelta) }
-
-            maxG = max(maxG, s.gradient)
-            minG = min(minG, s.gradient)
-        }
-
-        // max/min altitude（点驱动，增量更新）
-        let maxAlt: Double
-        let minAlt: Double
-        if summary.pointCount <= 1 {
-            maxAlt = latestPoint.altitude
-            minAlt = latestPoint.altitude
+        
+        // 更新坡度极值
+        // 注意：如果是第一个段落，原 summary 中的极值可能为初始值 (0)，需要特殊处理
+        let maxG: Double
+        let minG: Double
+        
+        if summary.segmentCount == 0 {
+             // 此时传入的 summary.segmentCount 还没加 1（或者刚加），
+             // 但逻辑上这是第一个有效的 segment update
+             maxG = segment.gradient
+             minG = segment.gradient
         } else {
-            maxAlt = max(summary.maxAltitude, latestPoint.altitude)
-            minAlt = min(summary.minAltitude, latestPoint.altitude)
+             maxG = max(summary.maxGradient, segment.gradient)
+             minG = min(summary.minGradient, segment.gradient)
         }
-
+        
         return RouteSummary(
             isValid: summary.isValid,
             pointCount: summary.pointCount,
-            segmentCount: segmentCount,
+            segmentCount: summary.segmentCount + 1, // 手动 +1，保持同步
             totalDistance: summary.totalDistance,
             averageSpeed: summary.averageSpeed,
             maxSpeed: summary.maxSpeed,
@@ -361,10 +351,50 @@ private extension TrackEngine {
             stoppedTime: summary.stoppedTime,
             totalElevationGain: gain,
             totalElevationLoss: loss,
-            maxAltitude: maxAlt,
-            minAltitude: minAlt,
+            maxAltitude: summary.maxAltitude,
+            minAltitude: summary.minAltitude,
             maxGradient: maxG,
             minGradient: minG,
+            startPoint: summary.startPoint,
+            endPoint: summary.endPoint,
+            metadata: summary.metadata
+        )
+    }
+    
+    /**
+     [O(1)] 增量更新：根据当前点更新海拔极值。
+     */
+    func updateSummaryAltitude(summary: RouteSummary, point: GeoPoint) -> RouteSummary {
+        
+        let maxAlt: Double
+        let minAlt: Double
+        
+        // 如果是第一个点（或之前的点数少于1），直接以当前点初始化
+        // 注意：pointsCount 在调用此方法前已经 +1 了
+        if summary.pointCount <= 1 {
+            maxAlt = point.altitude
+            minAlt = point.altitude
+        } else {
+            maxAlt = max(summary.maxAltitude, point.altitude)
+            minAlt = min(summary.minAltitude, point.altitude)
+        }
+        
+        return RouteSummary(
+            isValid: summary.isValid,
+            pointCount: summary.pointCount,
+            segmentCount: summary.segmentCount,
+            totalDistance: summary.totalDistance,
+            averageSpeed: summary.averageSpeed,
+            maxSpeed: summary.maxSpeed,
+            totalTime: summary.totalTime,
+            movingTime: summary.movingTime,
+            stoppedTime: summary.stoppedTime,
+            totalElevationGain: summary.totalElevationGain,
+            totalElevationLoss: summary.totalElevationLoss,
+            maxAltitude: maxAlt,
+            minAltitude: minAlt,
+            maxGradient: summary.maxGradient,
+            minGradient: summary.minGradient,
             startPoint: summary.startPoint,
             endPoint: summary.endPoint,
             metadata: summary.metadata

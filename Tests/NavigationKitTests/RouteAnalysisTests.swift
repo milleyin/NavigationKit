@@ -1,11 +1,4 @@
 //
-//  File.swift
-//  NavigationKit
-//
-//  Created by mille on 2025/12/26.
-//
-
-//
 //  RouteAnalysisTests.swift
 //  NavigationKit
 //
@@ -121,8 +114,11 @@ class RouteAnalysisTests: XCTestCase {
         let p1 = makePoint(lat: 0, lon: 0, offset: 0)
         let p2 = makePoint(lat: 0.001, lon: 0, offset: 10)
         
-        let segments = analyzer.process(p2, last: p1, segments: [])
-        guard let segment = segments.first else { XCTFail("未生成 Segment"); return }
+        // 修改：适配 v2.0 API，process 返回 RouteSegment? 而非数组，且不需要 segments 参数
+        guard let segment = analyzer.process(p2, last: p1) else {
+            XCTFail("未生成 Segment")
+            return
+        }
         
         XCTAssertGreaterThan(segment.distance, 100)
         XCTAssertEqual(segment.time, 10, accuracy: 0.001)
@@ -201,8 +197,11 @@ class RouteAnalysisTests: XCTestCase {
         // 经度增加 0.001 度，在纬度 30° 附近约为 96.5 米水平距离
         let endPoint = makePoint(lat: 30.0, lon: 120.001, alt: 85, offset: 10)
         
-        let segments = analyzer.process(endPoint, last: startPoint, segments: [])
-        guard let segment = segments.first else { XCTFail("Segment 生成失败"); return }
+        // 修改：适配 v2.0 API，直接接收 RouteSegment?
+        guard let segment = analyzer.process(endPoint, last: startPoint) else {
+            XCTFail("Segment 生成失败")
+            return
+        }
         
         // 验证坡度数值合理性：(85-100) / 96.5 * 100 ≈ -15.5%
         XCTAssertLessThan(segment.gradient, -10, "坡度应陡于 -10%")
