@@ -5,7 +5,6 @@
 //  Created by mille on 2025/12/9.
 //
 
-
 import Foundation
 
 /**
@@ -13,12 +12,12 @@ import Foundation
 
  - Important:
    本模块 **不会丢弃任何点**，也不会改变时间顺序；
-   仅对数值字段进行低通滤波，降低 GPS 抖动对后续分析的影响。
+   仅对数值字段进行 **低通滤波 (Low-pass Filter)**，降低 GPS 抖动对后续分析的影响。
 
  - Design Principles:
    - 输入一个点，输出一个点（1-in-1-out）
-   - 不做合法性判断（Cleaner 已负责）
-   - 不引入业务语义（Analyzer / Segment 才关心）
+   - 实现了指数加权移动平均 (EMA) 算法
+   - 解决了航向角 (Course) 的 0-360 度环绕平滑问题
  */
 public final class TrackSmoother {
 
@@ -29,8 +28,9 @@ public final class TrackSmoother {
 
      - Parameter alpha:
        平滑系数（0 ~ 1）。
-       - 越小 → 越平滑（响应慢）
-       - 越大 → 越灵敏（接近原始数据）
+       - `alpha = 1.0`: 不平滑（完全使用新值）
+       - `alpha = 0.1`: 强平滑（新值权重低，响应慢，轨迹非常圆滑）
+       - 推荐值: 0.1 ~ 0.3
      */
     public struct Config: Sendable, Equatable {
 
@@ -57,8 +57,8 @@ public final class TrackSmoother {
      重置内部状态。
 
      - Note:
-       当前版本为**无内部缓存实现**，
-       该方法为未来扩展（如多阶滤波）预留。
+       当前版本为**无内部缓存实现**（依赖外部传入 last 点），
+       该方法为未来扩展（如引入 Kalman 滤波或内部 Buffer）预留。
      */
     public func reset() {
         // v1 无状态，无需处理
@@ -71,39 +71,57 @@ public final class TrackSmoother {
 
      - Parameters:
        - point: 当前输入点（已通过 TrackCleaner）
-       - last: 上一个“已接受”的轨迹点
+       - last: 上一个“已接受”且“已平滑”的轨迹点
 
      - Returns:
        平滑后的 `GeoPoint`
      */
     public func process(_ point: GeoPoint, last: GeoPoint?) -> GeoPoint {
 
-        guard let last = last, config.alpha < 1 else {
-            // 第一个点 or alpha == 1：直接返回原始点
+        // 如果没有上一个点，或者配置为不平滑 (alpha >= 1)，直接返回原点
+        guard let last = last, config.alpha < 1.0 else {
             return point
         }
 
         let a = config.alpha
 
-        func smooth(_ current: Double, _ previous: Double) -> Double {
-            previous + a * (current - previous)
+        // 1. 线性平滑：适用于经纬度、海拔、速度
+        // 公式：Previous + alpha * (Current - Previous)
+        func smoothLinear(_ current: Double, _ previous: Double) -> Double {
+            return previous + a * (current - previous)
+        }
+        
+        // 2. 角度平滑：适用于航向角 (0~360)
+        // 解决 359° -> 1° 平滑成 180° 的错误，应平滑为 0° 附近
+        func smoothAngle(_ current: Double, _ previous: Double) -> Double {
+            var diff = current - previous
+            // 将差值限制在 -180 ~ 180 之间，寻找最短旋转方向
+            while diff < -180 { diff += 360 }
+            while diff > 180  { diff -= 360 }
+            
+            let result = previous + a * diff
+            
+            // 归一化结果到 0 ~ 360
+            return (result.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360)
         }
 
-        let latitude  = smooth(point.latitude,  last.latitude)
-        let longitude = smooth(point.longitude, last.longitude)
-        let altitude  = smooth(point.altitude,  last.altitude)
+        // --- 执行平滑 ---
+
+        let latitude  = smoothLinear(point.latitude,  last.latitude)
+        let longitude = smoothLinear(point.longitude, last.longitude)
+        let altitude  = smoothLinear(point.altitude,  last.altitude)
 
         let speed: Double?
         if let cur = point.speed, let prev = last.speed {
-            speed = smooth(cur, prev)
+            speed = smoothLinear(cur, prev)
         } else {
             speed = point.speed
         }
 
         let course: Double?
         if let cur = point.course, let prev = last.course {
-            // 航向角暂不做环绕处理（V1 保守处理）
-            course = smooth(cur, prev)
+            // 使用角度专用平滑算法
+            course = smoothAngle(cur, prev)
         } else {
             course = point.course
         }
@@ -112,7 +130,7 @@ public final class TrackSmoother {
             latitude: latitude,
             longitude: longitude,
             altitude: altitude,
-            timestamp: point.timestamp,
+            timestamp: point.timestamp, // 时间戳永远保持原始值，不平滑
             speed: speed,
             course: course
         )
