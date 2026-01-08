@@ -55,31 +55,28 @@ public final class TrackEngine {
      - Important: 所有单位均使用国际单位制（SI）。
      */
     public struct Config: Sendable, Equatable {
-
-        /// 是否启用轨迹清洗。默认 `true`。
-        public var enableCleaner: Bool = true
-
-        /// 是否启用轨迹平滑。默认 `false`（先不开，避免早期过拟合）。
-        public var enableSmoother: Bool = false
-
-        /// 停车判定速度阈值（m/s）。低于该阈值视为“可能停车”。
-        public var stopSpeedThreshold: Double = 0.277_777_777_8 // 1 km/h
-
-        /// 停车判定最短持续时间（秒）。低速持续超过该值视为停车。
-        public var stopMinimumDuration: TimeInterval = 15
-
-        /// 允许的最小时间间隔（秒）。小于该值可视为“噪声点/重复点”。
-        public var minimumTimeInterval: TimeInterval = 0.2
-
-        /// 允许的最大合理速度（m/s）。超过该值可视为异常点（仅供 cleaner 参考）。
-        public var maximumReasonableSpeed: Double = 80 // ~288 km/h，先给个保守上限
-
-        /// 允许的最大合理海拔突变（米）。超过该值可视为异常点（仅供 cleaner 参考）。
-        public var maximumAltitudeJump: Double = 200
-
-        /// 平滑系数（0~1），越小越平滑
-        public var smootherAlpha: Double = 0.2
-
+        
+        /// 清洗器配置。传 `nil` 则禁用清洗功能。
+        public var cleaner: TrackCleaner.Config? = .init()
+        
+        /// 平滑器配置。传 `nil` 则禁用平滑功能（默认关闭，防过拟合）。
+        public var smoother: TrackSmoother.Config? = nil
+        
+        /// 停车检测配置。
+        public var stopDetection: StopDetector.Config = .init()
+        
+        /// 基础统计分析配置（如移动速度阈值）。
+        public var analyzer: TrackAnalyzer.Config = .init()
+        
+        /// 针对特定场景的预设（方便用户直接调用）
+        public static let cycling = Config() // 默认就是骑行
+        public static let hiking: Config = {
+            var c = Config()
+            c.cleaner?.maxReasonableSpeed = 10 // 徒步速度
+            c.stopDetection.speedThreshold = 0.1
+            return c
+        }()
+        
         public init() {}
     }
 
@@ -126,8 +123,8 @@ public final class TrackEngine {
 
     private let config: Config
 
-    private let cleaner: TrackCleaner
-    private let smoother: TrackSmoother
+    private let cleaner: TrackCleaner?
+    private let smoother: TrackSmoother?
     private let analyzer: TrackAnalyzer
     private let segmentAnalyzer: SegmentAnalyzer
     private let stopDetector: StopDetector
@@ -145,25 +142,17 @@ public final class TrackEngine {
      - Important: 该类不持有任何系统资源，初始化不会触发定位/网络/传感器。
      - Parameter config: 引擎配置，控制清洗、平滑、停车识别等策略。
      */
-    public init(config: Config = .init()) {
+    public init(config: Config = .cycling) {
         self.config = config
-
-        self.cleaner = TrackCleaner(
-            maximumReasonableSpeed: config.maximumReasonableSpeed,
-            maximumAltitudeJump: config.maximumAltitudeJump,
-            minimumTimeInterval: config.minimumTimeInterval
-        )
-
-        self.smoother = TrackSmoother(config: .init(alpha: config.smootherAlpha))
-
-        self.analyzer = TrackAnalyzer()
+        // Cleaner & Smoother (Optional)
+        if let c = config.cleaner { self.cleaner = TrackCleaner(config: c) } else { self.cleaner = nil }
+        if let s = config.smoother { self.smoother = TrackSmoother(config: s) } else { self.smoother = nil }
+        
+        // Analyzer & Detector (Required)
+        self.analyzer = TrackAnalyzer(config: config.analyzer)
+        self.stopDetector = StopDetector(config: config.stopDetection)
+        
         self.segmentAnalyzer = SegmentAnalyzer()
-
-        /// ✅ StopDetector 统一在这里初始化（以后想换策略就改 config）
-        self.stopDetector = StopDetector(
-            speedThreshold: config.stopSpeedThreshold,
-            minimumDuration: config.stopMinimumDuration
-        )
     }
 
     // MARK: - Lifecycle
@@ -177,8 +166,7 @@ public final class TrackEngine {
      */
     public func start() {
         guard state != .running else { return }
-        if state == .idle { state = .running }
-        if state == .finished { state = .running }
+        state = .running
     }
     
     /**
@@ -191,7 +179,7 @@ public final class TrackEngine {
     public func finish() {
         guard state != .finished else { return }
 
-        /// ✅ 统一由 StopDetector 收尾 pending stop
+        /// 统一由 StopDetector 收尾 pending stop
         stops = stopDetector.finish(
             stops: stops,
             lastPoint: lastAcceptedPoint
@@ -222,8 +210,8 @@ public final class TrackEngine {
 
         lastAcceptedPoint = nil
 
-        cleaner.reset()
-        smoother.reset()
+        cleaner?.reset()
+        smoother?.reset()
         analyzer.reset()
         segmentAnalyzer.reset()
         stopDetector.reset()
@@ -246,50 +234,43 @@ public final class TrackEngine {
      */
     public func append(_ point: GeoPoint) {
         guard state == .running else { return }
-
-        // 1) Cleaner：丢掉异常点/重复点/时间倒退点等
+        
+        // 1. Cleaner (Optional)
+        // 修正逻辑：
+        // - 如果 cleaner 存在：必须听它的（它返回 nil 就丢弃，返回点就保留）。
+        // - 如果 cleaner 不存在：直接放行 (cleaned = point)。
+        
         let cleaned: GeoPoint?
-        if config.enableCleaner {
+        if let cleaner = cleaner {
             cleaned = cleaner.process(point, last: lastAcceptedPoint)
         } else {
             cleaned = point
         }
-
-        guard var accepted = cleaned else { return }
-
-        // 2) Smoother（可选）
-        if config.enableSmoother {
-            accepted = smoother.process(accepted, last: lastAcceptedPoint)
-        }
-
-        // 3) 更新内部状态
-        pointsCount += 1
-
-        // 4) Analyzer：更新基础 summary（距离/时间/速度等）
-        summary = analyzer.process(accepted, last: lastAcceptedPoint, summary: summary)
         
-        // 5) Altitude Stats：点驱动，增量更新海拔极值
-        summary = updateSummaryAltitude(summary: summary, point: accepted)
-
-        // 6) SegmentAnalyzer：尝试生成新段落 (O(1))
-        // v2.0 Change: 接收 RouteSegment? 而非数组
-        if let newSegment = segmentAnalyzer.process(accepted, last: lastAcceptedPoint) {
-            
-            // a. 存入列表
+        // 如果被洗掉了 (cleaned == nil)，直接 return，不再往下走
+        guard let accepted = cleaned else { return }
+        
+        // 2. Smoother (Optional)
+        // ✨ 同上，smoother 存在就平滑，不存在就用原值
+        let smoothed = smoother?.process(accepted, last: lastAcceptedPoint) ?? accepted
+        
+        // 3. Update Internal State
+        pointsCount += 1
+        
+        // 4. Analyzer (Point-Driven)
+        summary = analyzer.process(smoothed, last: lastAcceptedPoint, summary: summary)
+        summary = updateSummaryAltitude(summary: summary, point: smoothed)
+        
+        // 5. SegmentAnalyzer (Segment-Driven)
+        if let newSegment = segmentAnalyzer.process(smoothed, last: lastAcceptedPoint) {
             segments.append(newSegment)
-            
-            // b. 增量更新 Summary (爬升、坡度等) (O(1))
             summary = updateSummaryWithSegment(summary: summary, segment: newSegment)
         }
-
-        // 7) StopDetector：统一由 StopDetector 处理停车逻辑
-        stops = stopDetector.process(
-            accepted,
-            last: lastAcceptedPoint,
-            stops: stops
-        )
-
-        lastAcceptedPoint = accepted
+        
+        // 6. StopDetector
+        stops = stopDetector.process(smoothed, last: lastAcceptedPoint, stops: stops)
+        
+        lastAcceptedPoint = smoothed
     }
     
     /**
@@ -300,9 +281,7 @@ public final class TrackEngine {
      */
     public func process(_ points: [GeoPoint]) {
         if state != .running { start() }
-        for p in points {
-            append(p)
-        }
+        points.forEach { append($0) }
     }
 }
 

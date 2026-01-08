@@ -111,3 +111,46 @@ public final class StopDetector {
         pendingStart = nil
     }
 }
+
+// MARK: - Configuration Extension
+
+extension StopDetector {
+    
+    /**
+     `StopDetector` 的配置参数结构体。
+     
+     用于定义“什么是停车”的判别标准。
+     核心逻辑是基于 **速度** 和 **持续时间** 的双重阈值过滤。
+     */
+    public struct Config: Sendable, Equatable {
+        
+        /// 停车判定的速度阈值（米/秒）。
+        ///
+        /// 当瞬时速度低于此值时，状态机进入“可能停车”状态。
+        /// - Default: `0.277...` (即 1 km/h)
+        /// - Note: 建议设置一个很小但非零的值，以容忍 GPS 在静止时的微小漂移。
+        public var speedThreshold: Double = 0.277_777_777_8 // 1 km/h
+        
+        /// 判定为有效停车的最小持续时间（秒）。
+        ///
+        /// 只有当低速状态持续时间超过此值时，才会生成一个 `StopEvent`。
+        /// - Default: `15.0` 秒
+        /// - Purpose: 用于过滤掉短暂的交通停滞（如等红绿灯、避让行人），只记录有意义的驻留（如休息、补给）。
+        public var minDuration: TimeInterval = 15
+        
+        /// 使用默认值初始化配置。
+        public init() {}
+    }
+    
+    /**
+     使用配置对象初始化 `StopDetector`（便利构造器）。
+     
+     - Parameter config: 包含停车判定策略的配置对象。
+     */
+    public convenience init(config: Config) {
+        self.init(
+            speedThreshold: config.speedThreshold,
+            minimumDuration: config.minDuration
+        )
+    }
+}

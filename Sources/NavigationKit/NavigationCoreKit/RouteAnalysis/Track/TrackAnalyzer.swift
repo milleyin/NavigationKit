@@ -18,12 +18,25 @@ import Foundation
    GeoPoint → TrackAnalyzer → RouteSummary
  */
 public final class TrackAnalyzer {
+    
+    /// 定义 Config 结构体
+    public struct Config: Sendable, Equatable {
+        /// 判定移动的最小速度阈值（m/s），低于此值计入静止时间
+        public var movingSpeedThreshold: Double = 0.5
+        
+        public init() {}
+    }
 
     /// 判定“有效轨迹”的最小点数
     private let minimumValidPointCount: Int = 2
     
     /// 判定移动的最小速度阈值（m/s），低于此值计入静止时间
     private let movingSpeedThreshold: Double
+    
+    /// 新增：便利构造器，接收 Config
+    public convenience init(config: Config) {
+        self.init(movingSpeedThreshold: config.movingSpeedThreshold)
+    }
 
     public init(movingSpeedThreshold: Double = 0.5) {
             self.movingSpeedThreshold = movingSpeedThreshold
