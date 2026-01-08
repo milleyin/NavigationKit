@@ -166,3 +166,58 @@ private extension TrackCleaner {
         return abs(point.latitude) <= 90 && abs(point.longitude) <= 180
     }
 }
+
+// MARK: - Configuration Extension
+
+extension TrackCleaner {
+    
+    /**
+     `TrackCleaner` 的配置参数结构体。
+     
+     用于集中管理轨迹清洗的各项阈值策略。
+     
+     - Note:
+       所有参数单位均遵循 **国际单位制 (SI)**：
+       - 速度：米/秒 (m/s)
+       - 距离/高度：米 (m)
+       - 时间：秒 (s)
+     */
+    public struct Config: Sendable, Equatable {
+        
+        /// 最大合理速度（米/秒）。
+        ///
+        /// 超过该速度的轨迹点将被视为 GPS 漂移（跳点）而丢弃。
+        /// - Default: `80.0` (约 288 km/h，覆盖高铁以外的绝大多数陆地交通工具)
+        public var maxReasonableSpeed: Double = 80
+        
+        /// 允许的最大单次海拔突变（米）。
+        ///
+        /// 相邻两点间海拔变化超过该值时，当前点将被视为气压计异常或高度漂移而丢弃。
+        /// - Default: `200.0`
+        public var maxAltitudeJump: Double = 200
+        
+        /// 最小时间间隔（秒）。
+        ///
+        /// - Purpose:
+        ///   1. 过滤采样过密的数据（减少计算量）。
+        ///   2. 过滤时间戳重复或倒退的异常点。
+        /// - Default: `0.2` (即最高支持 5Hz 采样率)
+        public var minTimeInterval: TimeInterval = 0.2
+        
+        /// 使用默认值初始化配置。
+        public init() {}
+    }
+    
+    /**
+     使用配置对象初始化 `TrackCleaner`（便利构造器）。
+     
+     - Parameter config: 包含清洗策略阈值的配置对象。
+     */
+    public convenience init(config: Config) {
+        self.init(
+            maximumReasonableSpeed: config.maxReasonableSpeed,
+            maximumAltitudeJump: config.maxAltitudeJump,
+            minimumTimeInterval: config.minTimeInterval
+        )
+    }
+}
