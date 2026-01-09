@@ -21,7 +21,7 @@ class RouteAnalysisTests: XCTestCase {
 
     /**
      辅助方法：构造 GeoPoint。
-     
+      
      使用 `offset` 相对时间，保证测试的可重复性和时间轴的确定性。
      */
     private func makePoint(
@@ -80,6 +80,7 @@ class RouteAnalysisTests: XCTestCase {
      测试 TrackCleaner：能够识别并丢弃时间倒退的点。
      */
     func testCleaner_RejectsBackwardTime() {
+        // 使用 Config 或直接初始化均可，这里测试直接初始化接口
         let cleaner = TrackCleaner(maximumReasonableSpeed: 50, maximumAltitudeJump: 100, minimumTimeInterval: 0.5)
 
         let last = makePoint(offset: 10)
@@ -114,7 +115,7 @@ class RouteAnalysisTests: XCTestCase {
         let p1 = makePoint(lat: 0, lon: 0, offset: 0)
         let p2 = makePoint(lat: 0.001, lon: 0, offset: 10)
         
-        // 修改：适配 v2.0 API，process 返回 RouteSegment? 而非数组，且不需要 segments 参数
+        // v2.0 API: process 返回 RouteSegment?
         guard let segment = analyzer.process(p2, last: p1) else {
             XCTFail("未生成 Segment")
             return
@@ -167,6 +168,7 @@ class RouteAnalysisTests: XCTestCase {
      测试 TrackEngine：Finish 时应自动闭合尚未结束的停车事件。
      */
     func testEngine_FinishClosesPendingStop() {
+        // 使用默认配置：SpeedThreshold 约 0.27m/s (1km/h), MinDuration 15s
         let engine = TrackEngine()
         engine.start()
         
@@ -177,11 +179,14 @@ class RouteAnalysisTests: XCTestCase {
         engine.append(p1)
         engine.append(p2)
         
-        // 此时可能还没生成 StopEvent（还在 pending），调用 finish 强制闭合
+        // 此时 StopDetector 内部处于 pendingStart 状态，但尚未生成 StopEvent（只有在结束或速度恢复时生成）
+        // 调用 finish 强制闭合
         engine.finish()
         
         XCTAssertEqual(engine.stops.count, 1)
-        XCTAssertGreaterThanOrEqual(engine.stops.first?.duration ?? 0, 30)
+        if let stop = engine.stops.first {
+            XCTAssertGreaterThanOrEqual(stop.duration, 30)
+        }
     }
 
     // MARK: - Part 4: 真实场景合理性测试 (Rationality Scenarios)
@@ -197,7 +202,6 @@ class RouteAnalysisTests: XCTestCase {
         // 经度增加 0.001 度，在纬度 30° 附近约为 96.5 米水平距离
         let endPoint = makePoint(lat: 30.0, lon: 120.001, alt: 85, offset: 10)
         
-        // 修改：适配 v2.0 API，直接接收 RouteSegment?
         guard let segment = analyzer.process(endPoint, last: startPoint) else {
             XCTFail("Segment 生成失败")
             return
@@ -234,7 +238,6 @@ class RouteAnalysisTests: XCTestCase {
     /**
      场景 3：持续爬坡汇总
      模拟一段 30 秒的连续爬坡，验证 Summary 里的总爬升和平均速度。
-     *重要*：这里的经纬度步进经过计算，以匹配 10m/s 的目标速度。
      */
     func testRationality_UphillJourneySummary() {
         let engine = TrackEngine()
@@ -242,12 +245,13 @@ class RouteAnalysisTests: XCTestCase {
         
         // 为了模拟 10m/s 的速度：
         // 在 lat 30°，1 度纬度 ≈ 111km -> 0.0001 度 ≈ 11.1m
-        // 我们需要 10m，所以步进设为 0.00009 左右
+        // 我们需要 10m，所以步进设为 0.0000899 左右
         let step = 0.0000899
         
         for i in 0...30 {
             let p = makePoint(
                 lat: 30.0 + Double(i) * step,
+                lon: 120.0,
                 alt: 100.0 + Double(i) * 1.0, // 每秒爬 1 米
                 offset: TimeInterval(i),
                 speed: 10
@@ -259,6 +263,7 @@ class RouteAnalysisTests: XCTestCase {
         let summary = engine.summary
         
         // 1. 验证爬升：30步 * 1米 = 30米
+        // TrackEngine v2.0 通过 updateSummaryWithSegment 累加爬升
         XCTAssertEqual(summary.totalElevationGain, 30.0, accuracy: 0.1)
         
         // 2. 验证平均速度：现在距离计算应该非常接近 10m/s
@@ -275,7 +280,9 @@ class RouteAnalysisTests: XCTestCase {
      */
     func testRationality_ComplexUrbanRide() {
         let engine = TrackEngine()
-        // 假设配置：15秒判定停车，0.5m/s 判定移动（TrackAnalyzer 默认值）
+        // 默认配置 TrackAnalyzer movingSpeedThreshold = 0.5 m/s
+        // 默认配置 StopDetector speedThreshold ≈ 0.27 m/s, minDuration = 15s
+        
         engine.start()
         
         var currentTime: TimeInterval = 0
@@ -295,12 +302,12 @@ class RouteAnalysisTests: XCTestCase {
         
         // Stage 3: 红灯停车 (20s)
         // 模拟：速度很低 (0.2)，但 GPS 坐标有微小抖动
-        for i in 0..<20 {
+        for _ in 0..<20 {
             currentTime += 1
             let p = makePoint(
                 lat: 30.00045 + Double.random(in: -0.000001...0.000001),
                 offset: currentTime,
-                speed: 0.2 // < 0.5 阈值，应计入 stoppedTime
+                speed: 0.2 // < 0.27 (Stop阈值) 且 < 0.5 (Moving阈值)，应计入 StoppedTime 并触发 StopEvent
             )
             engine.append(p)
         }
@@ -326,6 +333,7 @@ class RouteAnalysisTests: XCTestCase {
         XCTAssertLessThan(summary.totalDistance, 5000, "异常漂移点未被过滤")
         
         // 2. Elevation 验证：冲刺阶段爬升了约 18m
+        // 注意：SegmentAnalyzer 在距离过短时可能不生成段，但此处速度 10m/s，距离足够
         XCTAssertEqual(summary.totalElevationGain, 18.0, accuracy: 2.0)
         
         // 3. Stop 验证：中间那 20s 应该识别为停车
@@ -339,6 +347,6 @@ class RouteAnalysisTests: XCTestCase {
         XCTAssertEqual(summary.movingTime, 20.0, accuracy: 5.0)
         XCTAssertGreaterThan(summary.stoppedTime, 15.0)
         
-        print("✅ 综合测试通过：Total Dist: \(Int(summary.totalDistance))m, Moving: \(Int(summary.movingTime))s, Stopped: \(Int(summary.stoppedTime))s")
+        print("Test Passed: Total Dist: \(Int(summary.totalDistance))m, Moving: \(Int(summary.movingTime))s, Stopped: \(Int(summary.stoppedTime))s")
     }
 }
