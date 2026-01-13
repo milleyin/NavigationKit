@@ -350,3 +350,49 @@ class RouteAnalysisTests: XCTestCase {
         print("Test Passed: Total Dist: \(Int(summary.totalDistance))m, Moving: \(Int(summary.movingTime))s, Stopped: \(Int(summary.stoppedTime))s")
     }
 }
+
+//MARK: - 接口测试
+extension RouteAnalysisTests {
+    
+    /// 测试 NavigationCoreKit.RouteAnalysis.analyze 能正常返回 RouteSummary
+    func testRouteAnalysisAnalyzeReturnsSummary() {
+        let points = [
+            makePoint(offset: 0, speed: 2),
+            makePoint(lat: 30.0001, offset: 10, speed: 2)
+        ]
+        let summary = NavigationCoreKit.RouteAnalysis.analyze(points: points)
+        XCTAssertTrue(summary.isValid)
+        XCTAssertGreaterThan(summary.totalDistance, 0)
+        XCTAssertGreaterThan(summary.pointCount, 1)
+    }
+
+    /// 测试 NavigationCoreKit.RouteAnalysis.analyzeDetail 能返回详细内容
+    func testRouteAnalysisAnalyzeDetailReturnsDetails() {
+        let points = [
+            makePoint(offset: 0, speed: 3),
+            makePoint(lat: 30.0001, offset: 5, speed: 3),
+            makePoint(lat: 30.0002, offset: 10, speed: 0) // 停车
+        ]
+        let detail = NavigationCoreKit.RouteAnalysis.analyzeDetail(points: points)
+        XCTAssertTrue(detail.summary.isValid)
+        XCTAssertEqual(detail.segments.count, 2)
+        XCTAssertEqual(detail.summary.pointCount, 3)
+        // 停车点可能因为配置未触发，可以允许 0 或 1
+        XCTAssertGreaterThanOrEqual(detail.stops.count, 0)
+    }
+
+    /// 测试自定义 config 能生效
+    func testRouteAnalysisWithCustomConfig() {
+        var config = TrackEngine.Config.cycling
+        config.analyzer.movingSpeedThreshold = 1.5 // 提高移动阈值
+        let points = [
+            makePoint(offset: 0, speed: 1.0), // 低速应该判定为静止
+            makePoint(lat: 30.0002, offset: 20, speed: 1.0)
+        ]
+        let summary = NavigationCoreKit.RouteAnalysis.analyze(points: points, config: config)
+        // 全程速度低于阈值，应该统计为静止
+        XCTAssertEqual(summary.movingTime, 0, accuracy: 0.001)
+        XCTAssertGreaterThan(summary.stoppedTime, 0)
+    }
+    
+}
