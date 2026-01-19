@@ -1,0 +1,309 @@
+{"timestamp":"2026-01-18T01:59:07Z","line":38,"message":"📍 LocationService 初始化","file":"LocationService.swift"}
+{"timestamp":"2026-01-18T01:59:07Z","line":50,"message":"🔐 定位权限状态: 未确定","file":"LocationService.swift"}
+{"timestamp":"2026-01-18T01:59:07Z","line":59,"message":"❓ 定位权限未确定，等待用户授权","file":"LocationService.swift"}
+{"timestamp":"2026-01-18T01:59:07Z","line":65,"message":"🔔 设置定位权限监听","file":"LocationService.swift"}
+{"message":"📡 开始订阅位置更新","line":77,"timestamp":"2026-01-18T01:59:07Z","file":"LocationService.swift"}
+{"line":53,"file":"HomePageViewModel.swift","timestamp":"2026-01-18T01:59:07Z","message":"🚀 HomePageViewModel 初始化"}
+{"timestamp":"2026-01-18T01:59:07Z","message":"📡 开始订阅速度数据","line":145,"file":"HomePageViewModel.swift"}
+{"message":"📡 开始订阅海拔数据","line":158,"timestamp":"2026-01-18T01:59:07Z","file":"HomePageViewModel.swift"}
+{"message":"📡 开始订阅爬升高度数据","line":169,"timestamp":"2026-01-18T01:59:07Z","file":"HomePageViewModel.swift"}
+{"message":"🔔 设置后台状态监听","line":70,"timestamp":"2026-01-18T01:59:07Z","file":"HomePageViewModel.swift"}
+{"message":"🗺️ HomePage 地图视图已显示","line":31,"timestamp":"2026-01-18T01:59:07Z","file":"HomePage.swift"}
+{"message":"📱 HomePage 视图已显示","line":207,"timestamp":"2026-01-18T01:59:07Z","file":"HomePage.swift"}
+{"message":"⛰️ 海拔更新: 0.0 m","file":"HomePageViewModel.swift","timestamp":"2026-01-18T01:59:07Z","line":163}
+{"message":"🔐 定位权限状态: 未确定","file":"LocationService.swift","timestamp":"2026-01-18T01:59:07Z","line":50}
+{"message":"❓ 定位权限未确定，等待用户授权","file":"LocationService.swift","timestamp":"2026-01-18T01:59:07Z","line":59}
+{"timestamp":"2026-01-18T01:59:07Z","file":"HomePage.swift","line":213,"message":"🔄 场景状态变化: inactive -> active"}
+{"line":216,"file":"HomePage.swift","message":"✅ App 进入活跃状态","timestamp":"2026-01-18T01:59:07Z"}
+{"file":"HomePage.swift","line":213,"message":"🔄 场景状态变化: active -> inactive","timestamp":"2026-01-18T01:59:07Z"}
+{"timestamp":"2026-01-18T01:59:07Z","line":218,"file":"HomePage.swift","message":"⏸️ App 进入非活跃状态"}
+{"line":89,"timestamp":"2026-01-18T01:59:10Z","file":"LocationService.swift","message":"📍 位置更新: (24.169661, 120.686948), 精度: 8.0m"}
+{"line":163,"timestamp":"2026-01-18T01:59:10Z","file":"HomePageViewModel.swift","message":"⛰️ 海拔更新: 150.6 m"}
+{"message":"🔐 定位权限状态: 使用期间允许","timestamp":"2026-01-18T01:59:10Z","file":"LocationService.swift","line":50}
+{"file":"LocationService.swift","message":"⚠️ 仅授权前台定位，建议升级为「始终允许」以支持后台记录","line":55,"timestamp":"2026-01-18T01:59:10Z"}
+{"file":"HomePage.swift","message":"🔄 场景状态变化: inactive -> active","timestamp":"2026-01-18T01:59:10Z","line":213}
+{"file":"HomePage.swift","message":"✅ App 进入活跃状态","timestamp":"2026-01-18T01:59:10Z","line":216}
+{"line":89,"timestamp":"2026-01-18T01:59:12Z","file":"LocationService.swift","message":"📍 位置更新: (24.169661, 120.686948), 精度: 8.0m"}
+{"message":"⛰️ 海拔更新: 150.6 m","file":"HomePageViewModel.swift","timestamp":"2026-01-18T01:59:12Z","line":163}
+{"file":"HomePage.swift","message":"🔄 场景状态变化: active -> inactive","timestamp":"2026-01-18T01:59:18Z","line":213}
+{"file":"HomePage.swift","message":"⏸️ App 进入非活跃状态","timestamp":"2026-01-18T01:59:18Z","line":218}
+{"timestamp":"2026-01-18T01:59:20Z","file":"HomePageViewModel.swift","line":76,"message":"📱 App 进入后台，记录状态: false"}
+{"timestamp":"2026-01-18T01:59:20Z","file":"HomePage.swift","line":213,"message":"🔄 场景状态变化: inactive -> background"}
+{"timestamp":"2026-01-18T01:59:20Z","file":"HomePage.swift","line":220,"message":"🌙 App 进入后台状态，记录中: false"}
+{"message":"📱 App 进入前台，轨迹点数: 0","file":"HomePageViewModel.swift","timestamp":"2026-01-18T02:00:08Z","line":87}
+{"message":"🔄 场景状态变化: background -> inactive","file":"HomePage.swift","timestamp":"2026-01-18T02:00:08Z","line":213}
+{"file":"HomePage.swift","line":218,"message":"⏸️ App 进入非活跃状态","timestamp":"2026-01-18T02:00:08Z"}
+{"message":"📍 位置更新: (24.169661, 120.686948), 精度: 8.4m","file":"LocationService.swift","timestamp":"2026-01-18T02:00:08Z","line":89}
+{"message":"⛰️ 海拔更新: 150.6 m","file":"HomePageViewModel.swift","timestamp":"2026-01-18T02:00:08Z","line":163}
+{"message":"📍 位置更新: (24.169661, 120.686948), 精度: 8.4m","file":"LocationService.swift","timestamp":"2026-01-18T02:00:08Z","line":89}
+{"message":"⛰️ 海拔更新: 150.6 m","file":"HomePageViewModel.swift","timestamp":"2026-01-18T02:00:08Z","line":163}
+{"file":"LocationService.swift","message":"🔐 定位权限状态: 使用期间允许","timestamp":"2026-01-18T02:00:08Z","line":50}
+{"message":"⚠️ 仅授权前台定位，建议升级为「始终允许」以支持后台记录","timestamp":"2026-01-18T02:00:08Z","line":55,"file":"LocationService.swift"}
+{"file":"HomePage.swift","line":213,"message":"🔄 场景状态变化: inactive -> active","timestamp":"2026-01-18T02:00:08Z"}
+{"file":"HomePage.swift","line":216,"message":"✅ App 进入活跃状态","timestamp":"2026-01-18T02:00:08Z"}
+{"message":"🔄 场景状态变化: active -> inactive","file":"HomePage.swift","timestamp":"2026-01-18T02:00:24Z","line":213}
+{"message":"⏸️ App 进入非活跃状态","file":"HomePage.swift","timestamp":"2026-01-18T02:00:24Z","line":218}
+{"timestamp":"2026-01-18T02:00:26Z","file":"HomePageViewModel.swift","line":76,"message":"📱 App 进入后台，记录状态: false"}
+{"timestamp":"2026-01-18T02:00:26Z","file":"HomePage.swift","line":213,"message":"🔄 场景状态变化: inactive -> background"}
+{"timestamp":"2026-01-18T02:00:26Z","file":"HomePage.swift","line":220,"message":"🌙 App 进入后台状态，记录中: false"}
+{"timestamp":"2026-01-18T02:01:00Z","file":"LocationService.swift","line":89,"message":"📍 位置更新: (24.169661, 120.686948), 精度: 18.5m"}
+{"timestamp":"2026-01-18T02:01:00Z","file":"HomePageViewModel.swift","line":163,"message":"⛰️ 海拔更新: 150.6 m"}
+{"timestamp":"2026-01-18T02:01:01Z","file":"LocationService.swift","line":89,"message":"📍 位置更新: (24.169661, 120.686948), 精度: 18.5m"}
+{"timestamp":"2026-01-18T02:01:01Z","file":"HomePageViewModel.swift","line":163,"message":"⛰️ 海拔更新: 150.6 m"}
+{"file":"LocationService.swift","line":38,"timestamp":"2026-01-18T02:46:19Z","message":"📍 LocationService 初始化"}
+{"file":"LocationService.swift","line":50,"timestamp":"2026-01-18T02:46:19Z","message":"🔐 定位权限状态: 始终允许"}
+{"file":"LocationService.swift","line":53,"timestamp":"2026-01-18T02:46:19Z","message":"✅ 后台定位已启用"}
+{"file":"LocationService.swift","line":65,"timestamp":"2026-01-18T02:46:19Z","message":"🔔 设置定位权限监听"}
+{"file":"LocationService.swift","line":77,"timestamp":"2026-01-18T02:46:19Z","message":"📡 开始订阅位置更新"}
+{"file":"HomePageViewModel.swift","line":53,"message":"🚀 HomePageViewModel 初始化","timestamp":"2026-01-18T02:46:19Z"}
+{"file":"HomePageViewModel.swift","line":145,"message":"📡 开始订阅速度数据","timestamp":"2026-01-18T02:46:19Z"}
+{"file":"HomePageViewModel.swift","line":158,"message":"📡 开始订阅海拔数据","timestamp":"2026-01-18T02:46:19Z"}
+{"file":"HomePageViewModel.swift","line":169,"message":"📡 开始订阅爬升高度数据","timestamp":"2026-01-18T02:46:19Z"}
+{"file":"HomePageViewModel.swift","line":70,"message":"🔔 设置后台状态监听","timestamp":"2026-01-18T02:46:19Z"}
+{"file":"HomePage.swift","message":"🗺️ HomePage 地图视图已显示","line":31,"timestamp":"2026-01-18T02:46:19Z"}
+{"file":"HomePage.swift","message":"📱 HomePage 视图已显示","line":207,"timestamp":"2026-01-18T02:46:19Z"}
+{"file":"LocationService.swift","message":"📍 位置更新: (24.169661, 120.686948), 精度: 19.6m","line":89,"timestamp":"2026-01-18T02:46:19Z"}
+{"file":"HomePageViewModel.swift","message":"⛰️ 海拔更新: 151.7 m","line":163,"timestamp":"2026-01-18T02:46:19Z"}
+{"file":"LocationService.swift","message":"📍 位置更新: (24.169661, 120.686948), 精度: 19.6m","line":89,"timestamp":"2026-01-18T02:46:19Z"}
+{"file":"HomePageViewModel.swift","message":"⛰️ 海拔更新: 151.7 m","line":163,"timestamp":"2026-01-18T02:46:19Z"}
+{"file":"LocationService.swift","message":"📍 位置更新: (24.169661, 120.686948), 精度: 19.8m","line":89,"timestamp":"2026-01-18T02:46:19Z"}
+{"file":"HomePageViewModel.swift","message":"⛰️ 海拔更新: 151.7 m","line":163,"timestamp":"2026-01-18T02:46:19Z"}
+{"message":"🔐 定位权限状态: 始终允许","timestamp":"2026-01-18T02:46:19Z","line":50,"file":"LocationService.swift"}
+{"message":"✅ 后台定位已启用","timestamp":"2026-01-18T02:46:19Z","line":53,"file":"LocationService.swift"}
+{"message":"🔄 场景状态变化: inactive -> active","timestamp":"2026-01-18T02:46:19Z","line":213,"file":"HomePage.swift"}
+{"message":"✅ App 进入活跃状态","timestamp":"2026-01-18T02:46:19Z","line":216,"file":"HomePage.swift"}
+{"file":"HomePage.swift","timestamp":"2026-01-18T02:46:41Z","line":213,"message":"🔄 场景状态变化: active -> inactive"}
+{"line":38,"file":"LocationService.swift","timestamp":"2026-01-18T02:56:37Z","message":"📍 LocationService 初始化"}
+{"line":50,"file":"LocationService.swift","timestamp":"2026-01-18T02:56:37Z","message":"🔐 定位权限状态: 始终允许"}
+{"line":53,"file":"LocationService.swift","timestamp":"2026-01-18T02:56:37Z","message":"✅ 后台定位已启用"}
+{"line":65,"file":"LocationService.swift","timestamp":"2026-01-18T02:56:37Z","message":"🔔 设置定位权限监听"}
+{"line":77,"file":"LocationService.swift","timestamp":"2026-01-18T02:56:37Z","message":"📡 开始订阅位置更新"}
+{"line":53,"message":"🚀 HomePageViewModel 初始化","timestamp":"2026-01-18T02:56:37Z","file":"HomePageViewModel.swift"}
+{"line":145,"timestamp":"2026-01-18T02:56:37Z","file":"HomePageViewModel.swift","message":"📡 开始订阅速度数据"}
+{"line":158,"timestamp":"2026-01-18T02:56:37Z","file":"HomePageViewModel.swift","message":"📡 开始订阅海拔数据"}
+{"line":169,"timestamp":"2026-01-18T02:56:37Z","file":"HomePageViewModel.swift","message":"📡 开始订阅爬升高度数据"}
+{"timestamp":"2026-01-18T02:56:37Z","file":"HomePageViewModel.swift","line":70,"message":"🔔 设置后台状态监听"}
+{"timestamp":"2026-01-18T02:56:37Z","file":"HomePage.swift","line":31,"message":"🗺️ HomePage 地图视图已显示"}
+{"timestamp":"2026-01-18T02:56:37Z","file":"HomePage.swift","line":207,"message":"📱 HomePage 视图已显示"}
+{"timestamp":"2026-01-18T02:56:37Z","file":"LocationService.swift","line":89,"message":"📍 位置更新: (24.169719, 120.686745), 精度: 19.6m"}
+{"timestamp":"2026-01-18T02:56:37Z","file":"LocationService.swift","line":89,"message":"📍 位置更新: (24.169719, 120.686745), 精度: 19.6m"}
+{"timestamp":"2026-01-18T02:56:37Z","file":"HomePageViewModel.swift","line":163,"message":"⛰️ 海拔更新: 150.8 m"}
+{"message":"🔐 定位权限状态: 始终允许","file":"LocationService.swift","timestamp":"2026-01-18T02:56:38Z","line":50}
+{"message":"✅ 后台定位已启用","file":"LocationService.swift","timestamp":"2026-01-18T02:56:38Z","line":53}
+{"message":"🔄 场景状态变化: inactive -> active","file":"HomePage.swift","timestamp":"2026-01-18T02:56:38Z","line":213}
+{"message":"✅ App 进入活跃状态","file":"HomePage.swift","timestamp":"2026-01-18T02:56:38Z","line":216}
+{"file":"HomePage.swift","timestamp":"2026-01-18T02:56:38Z","message":"👆 用户点击：开始记录按钮","line":170}
+{"file":"LocationService.swift","timestamp":"2026-01-18T02:56:38Z","message":"📊 后台定位状态检查:","line":170}
+{"file":"LocationService.swift","timestamp":"2026-01-18T02:56:38Z","message":"  - 授权状态: 始终允许","line":171}
+{"file":"LocationService.swift","timestamp":"2026-01-18T02:56:38Z","message":"  - 后台定位: ✅ 已启用","line":172}
+{"file":"LocationService.swift","timestamp":"2026-01-18T02:56:38Z","message":"  - 当前位置: ✅ 有效","line":173}
+{"file":"LocationService.swift","timestamp":"2026-01-18T02:56:38Z","message":"  - 定位精度: 很好 (<20m)","line":174}
+{"file":"LocationService.swift","timestamp":"2026-01-18T02:56:38Z","message":"🔍 后台定位条件检查:","line":208}
+{"file":"LocationService.swift","timestamp":"2026-01-18T02:56:38Z","message":"  ✅ 定位权限已授予","line":209}
+{"file":"LocationService.swift","timestamp":"2026-01-18T02:56:38Z","message":"  ✅ 位置数据有效","line":209}
+{"file":"LocationService.swift","timestamp":"2026-01-18T02:56:38Z","message":"  ✅ 定位精度良好","line":209}
+{"file":"HomePageViewModel.swift","timestamp":"2026-01-18T02:56:38Z","message":"✅ 开始记录轨迹","line":200}
+{"file":"HomePageViewModel.swift","timestamp":"2026-01-18T02:56:38Z","message":"📡 位置数据订阅已建立","line":248}
+{"line":213,"message":"🔄 场景状态变化: active -> inactive","file":"HomePage.swift","timestamp":"2026-01-18T02:56:40Z"}
+{"line":218,"message":"⏸️ App 进入非活跃状态","file":"HomePage.swift","timestamp":"2026-01-18T02:56:40Z"}
+{"file":"HomePageViewModel.swift","timestamp":"2026-01-18T02:56:41Z","message":"📱 App 进入后台，记录状态: true","line":76}
+{"file":"HomePageViewModel.swift","timestamp":"2026-01-18T02:56:41Z","message":"🌙 开始后台任务","line":106}
+{"file":"HomePageViewModel.swift","timestamp":"2026-01-18T02:56:41Z","message":"🆔 后台任务 ID: 5","line":114}
+{"file":"HomePageViewModel.swift","timestamp":"2026-01-18T02:56:41Z","message":"⏱️ 后台剩余时间: 179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.0 秒","line":119}
+{"file":"HomePage.swift","timestamp":"2026-01-18T02:56:41Z","message":"🔄 场景状态变化: inactive -> background","line":213}
+{"file":"HomePage.swift","timestamp":"2026-01-18T02:56:41Z","message":"🌙 App 进入后台状态，记录中: true","line":220}
+{"line":87,"file":"HomePageViewModel.swift","message":"📱 App 进入前台，轨迹点数: 1","timestamp":"2026-01-18T02:56:41Z"}
+{"line":129,"file":"HomePageViewModel.swift","message":"🌙 结束后台任务，ID: 5","timestamp":"2026-01-18T02:56:41Z"}
+{"line":213,"file":"HomePage.swift","message":"🔄 场景状态变化: background -> inactive","timestamp":"2026-01-18T02:56:41Z"}
+{"line":218,"file":"HomePage.swift","message":"⏸️ App 进入非活跃状态","timestamp":"2026-01-18T02:56:41Z"}
+{"file":"LocationService.swift","line":50,"timestamp":"2026-01-18T02:56:41Z","message":"🔐 定位权限状态: 始终允许"}
+{"file":"LocationService.swift","line":53,"timestamp":"2026-01-18T02:56:41Z","message":"✅ 后台定位已启用"}
+{"message":"🔄 场景状态变化: inactive -> active","file":"HomePage.swift","line":213,"timestamp":"2026-01-18T02:56:41Z"}
+{"message":"✅ App 进入活跃状态","file":"HomePage.swift","line":216,"timestamp":"2026-01-18T02:56:41Z"}
+{"timestamp":"2026-01-18T02:56:42Z","line":213,"message":"🔄 场景状态变化: active -> inactive","file":"HomePage.swift"}
+{"timestamp":"2026-01-18T02:56:42Z","line":218,"message":"⏸️ App 进入非活跃状态","file":"HomePage.swift"}
+{"file":"HomePageViewModel.swift","line":76,"message":"📱 App 进入后台，记录状态: true","timestamp":"2026-01-18T02:56:44Z"}
+{"file":"HomePageViewModel.swift","line":106,"message":"🌙 开始后台任务","timestamp":"2026-01-18T02:56:44Z"}
+{"file":"HomePageViewModel.swift","line":114,"message":"🆔 后台任务 ID: 14","timestamp":"2026-01-18T02:56:44Z"}
+{"file":"HomePageViewModel.swift","line":119,"message":"⏱️ 后台剩余时间: 179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.0 秒","timestamp":"2026-01-18T02:56:44Z"}
+{"file":"HomePage.swift","line":213,"message":"🔄 场景状态变化: inactive -> background","timestamp":"2026-01-18T02:56:44Z"}
+{"file":"HomePage.swift","line":220,"message":"🌙 App 进入后台状态，记录中: true","timestamp":"2026-01-18T02:56:44Z"}
+{"line":110,"message":"⏰ 后台时间即将耗尽","file":"HomePageViewModel.swift","timestamp":"2026-01-18T02:57:10Z"}
+{"line":129,"message":"🌙 结束后台任务，ID: 14","file":"HomePageViewModel.swift","timestamp":"2026-01-18T02:57:10Z"}
+{"timestamp":"2026-01-18T03:01:35Z","file":"HomePageViewModel.swift","message":"📱 App 进入前台，轨迹点数: 1","line":87}
+{"timestamp":"2026-01-18T03:01:35Z","file":"HomePage.swift","message":"🔄 场景状态变化: background -> inactive","line":213}
+{"timestamp":"2026-01-18T03:01:35Z","file":"HomePage.swift","message":"⏸️ App 进入非活跃状态","line":218}
+{"timestamp":"2026-01-18T03:01:35Z","message":"📍 位置更新: (24.171556, 120.690060), 精度: 8.1m","file":"LocationService.swift","line":89}
+{"timestamp":"2026-01-18T03:01:35Z","message":"⛰️ 海拔更新: 130.6 m","file":"HomePageViewModel.swift","line":163}
+{"timestamp":"2026-01-18T03:01:35Z","message":"🗺️ Polyline 已更新，坐标点数: 2","file":"HomePageViewModel.swift","line":330}
+{"file":"LocationService.swift","timestamp":"2026-01-18T03:01:35Z","line":50,"message":"🔐 定位权限状态: 始终允许"}
+{"file":"LocationService.swift","timestamp":"2026-01-18T03:01:35Z","line":53,"message":"✅ 后台定位已启用"}
+{"timestamp":"2026-01-18T03:01:35Z","line":213,"message":"🔄 场景状态变化: inactive -> active","file":"HomePage.swift"}
+{"timestamp":"2026-01-18T03:01:35Z","line":216,"message":"✅ App 进入活跃状态","file":"HomePage.swift"}
+{"message":"📱 App 进入后台，记录状态: true","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:01:46Z","line":76}
+{"message":"🌙 开始后台任务","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:01:46Z","line":106}
+{"message":"🆔 后台任务 ID: 23","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:01:46Z","line":114}
+{"message":"⏱️ 后台剩余时间: 179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.0 秒","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:01:46Z","line":119}
+{"message":"🔄 场景状态变化: active -> background","file":"HomePage.swift","timestamp":"2026-01-18T03:01:46Z","line":213}
+{"message":"🌙 App 进入后台状态，记录中: true","file":"HomePage.swift","timestamp":"2026-01-18T03:01:46Z","line":220}
+{"line":89,"message":"📍 位置更新: (24.171491, 120.690429), 精度: 8.1m","timestamp":"2026-01-18T03:01:54Z","file":"LocationService.swift"}
+{"line":163,"message":"⛰️ 海拔更新: 129.9 m","timestamp":"2026-01-18T03:01:54Z","file":"HomePageViewModel.swift"}
+{"file":"LocationService.swift","timestamp":"2026-01-18T03:01:58Z","line":89,"message":"📍 位置更新: (24.171451, 120.690790), 精度: 8.0m"}
+{"file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:01:58Z","line":163,"message":"⛰️ 海拔更新: 129.8 m"}
+{"message":"📍 位置更新: (24.171408, 120.691248), 精度: 8.0m","file":"LocationService.swift","timestamp":"2026-01-18T03:02:02Z","line":89}
+{"message":"⛰️ 海拔更新: 131.1 m","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:02:02Z","line":163}
+{"timestamp":"2026-01-18T03:02:05Z","file":"LocationService.swift","line":89,"message":"📍 位置更新: (24.171369, 120.691610), 精度: 8.7m"}
+{"timestamp":"2026-01-18T03:02:05Z","file":"HomePageViewModel.swift","line":163,"message":"⛰️ 海拔更新: 130.7 m"}
+{"line":89,"file":"LocationService.swift","timestamp":"2026-01-18T03:02:08Z","message":"📍 位置更新: (24.171332, 120.691969), 精度: 8.1m"}
+{"line":163,"file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:02:08Z","message":"⛰️ 海拔更新: 130.0 m"}
+{"file":"LocationService.swift","timestamp":"2026-01-18T03:02:11Z","line":89,"message":"📍 位置更新: (24.171286, 120.692374), 精度: 8.0m"}
+{"file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:02:11Z","line":163,"message":"⛰️ 海拔更新: 130.6 m"}
+{"line":110,"message":"⏰ 后台时间即将耗尽","timestamp":"2026-01-18T03:02:12Z","file":"HomePageViewModel.swift"}
+{"line":129,"message":"🌙 结束后台任务，ID: 23","timestamp":"2026-01-18T03:02:12Z","file":"HomePageViewModel.swift"}
+{"message":"📍 位置更新: (24.171240, 120.692817), 精度: 10.8m","line":89,"file":"LocationService.swift","timestamp":"2026-01-18T03:02:14Z"}
+{"message":"⛰️ 海拔更新: 132.6 m","line":163,"file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:02:14Z"}
+{"timestamp":"2026-01-18T03:19:53Z","file":"HomePageViewModel.swift","line":87,"message":"📱 App 进入前台，轨迹点数: 9"}
+{"timestamp":"2026-01-18T03:19:53Z","file":"HomePage.swift","line":213,"message":"🔄 场景状态变化: background -> inactive"}
+{"timestamp":"2026-01-18T03:19:53Z","file":"HomePage.swift","line":218,"message":"⏸️ App 进入非活跃状态"}
+{"file":"LocationService.swift","line":89,"message":"📍 位置更新: (24.187847, 120.707916), 精度: 2.5m","timestamp":"2026-01-18T03:19:53Z"}
+{"file":"HomePageViewModel.swift","line":175,"message":"📈 爬升高度更新: 5.0 m","timestamp":"2026-01-18T03:19:53Z"}
+{"file":"HomePageViewModel.swift","line":232,"message":"📍 已收集 10 个轨迹点","timestamp":"2026-01-18T03:19:53Z"}
+{"file":"HomePageViewModel.swift","line":163,"message":"⛰️ 海拔更新: 159.2 m","timestamp":"2026-01-18T03:19:53Z"}
+{"timestamp":"2026-01-18T03:19:54Z","file":"LocationService.swift","line":50,"message":"🔐 定位权限状态: 始终允许"}
+{"file":"LocationService.swift","line":53,"timestamp":"2026-01-18T03:19:54Z","message":"✅ 后台定位已启用"}
+{"message":"🔄 场景状态变化: inactive -> active","timestamp":"2026-01-18T03:19:54Z","file":"HomePage.swift","line":213}
+{"line":216,"file":"HomePage.swift","timestamp":"2026-01-18T03:19:54Z","message":"✅ App 进入活跃状态"}
+{"message":"👆 用户点击：停止记录按钮","file":"HomePage.swift","timestamp":"2026-01-18T03:19:54Z","line":167}
+{"message":"⏹️ 停止记录轨迹，共 10 个点","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:19:54Z","line":258}
+{"message":"📡 开始订阅速度数据","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:19:54Z","line":145}
+{"message":"📡 开始订阅海拔数据","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:19:54Z","line":158}
+{"message":"📡 开始订阅爬升高度数据","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:19:54Z","line":169}
+{"message":"🔔 设置后台状态监听","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:19:54Z","line":70}
+{"message":"🔌 位置数据订阅已取消","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:19:54Z","line":273}
+{"message":"📊 开始分析轨迹，点数: 10","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:19:54Z","line":286}
+{"message":"⛰️ 海拔更新: 159.2 m","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:19:54Z","line":163}
+{"message":"📈 爬升高度更新: 5.0 m","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:19:54Z","line":175}
+{"timestamp":"2026-01-18T03:19:54Z","line":294,"file":"HomePageViewModel.swift","message":"✅ 轨迹分析完成:"}
+{"timestamp":"2026-01-18T03:19:54Z","line":295,"file":"HomePageViewModel.swift","message":"  📏 总距离: 3074.59 m (3.07 km)"}
+{"timestamp":"2026-01-18T03:19:54Z","line":296,"file":"HomePageViewModel.swift","message":"  ⏱️ 总时长: 1395.2 s (23:15)"}
+{"timestamp":"2026-01-18T03:19:54Z","line":297,"file":"HomePageViewModel.swift","message":"  🚀 平均速度: 78.84 km\/h"}
+{"timestamp":"2026-01-18T03:19:54Z","line":298,"file":"HomePageViewModel.swift","message":"  📈 爬升高度: 30.4 m"}
+{"timestamp":"2026-01-18T03:19:54Z","line":299,"file":"HomePageViewModel.swift","message":"  📉 下降高度: 22.1 m"}
+{"timestamp":"2026-01-18T03:19:54Z","line":303,"file":"HomePageViewModel.swift","message":"  🏁 起点: (24.169719, 120.686745)"}
+{"timestamp":"2026-01-18T03:19:54Z","line":304,"file":"HomePageViewModel.swift","message":"  🏁 终点: (24.187847, 120.707916)"}
+{"timestamp":"2026-01-18T03:19:54Z","line":305,"file":"HomePageViewModel.swift","message":"  🕐 起始时间: 2026-01-18 02:56:37 +0000"}
+{"timestamp":"2026-01-18T03:19:54Z","line":306,"file":"HomePageViewModel.swift","message":"  🕐 结束时间: 2026-01-18 03:19:53 +0000"}
+{"timestamp":"2026-01-18T03:19:54Z","line":311,"file":"HomePageViewModel.swift","message":"  📊 采集时长: 23:15"}
+{"timestamp":"2026-01-18T03:19:54Z","line":158,"file":"HomePage.swift","message":"📊 轨迹分析结果面板已显示"}
+{"message":"📱 App 进入后台，记录状态: false","timestamp":"2026-01-18T03:20:31Z","file":"HomePageViewModel.swift","line":76}
+{"message":"🔄 场景状态变化: active -> background","timestamp":"2026-01-18T03:20:31Z","file":"HomePage.swift","line":213}
+{"message":"🌙 App 进入后台状态，记录中: false","timestamp":"2026-01-18T03:20:31Z","file":"HomePage.swift","line":220}
+{"line":87,"message":"📱 App 进入前台，轨迹点数: 10","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:22:19Z"}
+{"line":213,"message":"🔄 场景状态变化: background -> inactive","file":"HomePage.swift","timestamp":"2026-01-18T03:22:19Z"}
+{"line":218,"message":"⏸️ App 进入非活跃状态","file":"HomePage.swift","timestamp":"2026-01-18T03:22:19Z"}
+{"line":89,"message":"📍 位置更新: (24.187604, 120.707937), 精度: 78.0m","file":"LocationService.swift","timestamp":"2026-01-18T03:22:19Z"}
+{"line":175,"message":"📈 爬升高度更新: 8.4 m","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:22:19Z"}
+{"line":163,"message":"⛰️ 海拔更新: 156.5 m","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:22:19Z"}
+{"line":175,"message":"📈 爬升高度更新: 11.2 m","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:22:19Z"}
+{"line":163,"message":"⛰️ 海拔更新: 156.5 m","file":"HomePageViewModel.swift","timestamp":"2026-01-18T03:22:19Z"}
+{"timestamp":"2026-01-18T03:22:19Z","file":"LocationService.swift","line":50,"message":"🔐 定位权限状态: 始终允许"}
+{"timestamp":"2026-01-18T03:22:19Z","file":"LocationService.swift","line":53,"message":"✅ 后台定位已启用"}
+{"timestamp":"2026-01-18T03:22:19Z","line":213,"message":"🔄 场景状态变化: inactive -> active","file":"HomePage.swift"}
+{"line":216,"file":"HomePage.swift","timestamp":"2026-01-18T03:22:19Z","message":"✅ App 进入活跃状态"}
+{"line":213,"timestamp":"2026-01-18T03:22:23Z","message":"🔄 场景状态变化: active -> inactive","file":"HomePage.swift"}
+{"line":218,"timestamp":"2026-01-18T03:22:23Z","message":"⏸️ App 进入非活跃状态","file":"HomePage.swift"}
+{"line":89,"timestamp":"2026-01-18T03:22:25Z","message":"📍 位置更新: (24.187506, 120.707980), 精度: 99.2m","file":"LocationService.swift"}
+{"line":175,"timestamp":"2026-01-18T03:22:25Z","message":"📈 爬升高度更新: 13.4 m","file":"HomePageViewModel.swift"}
+{"line":163,"timestamp":"2026-01-18T03:22:25Z","message":"⛰️ 海拔更新: 156.5 m","file":"HomePageViewModel.swift"}
+{"message":"🔐 定位权限状态: 始终允许","timestamp":"2026-01-18T03:22:26Z","file":"LocationService.swift","line":50}
+{"message":"✅ 后台定位已启用","timestamp":"2026-01-18T03:22:26Z","file":"LocationService.swift","line":53}
+{"timestamp":"2026-01-18T03:22:26Z","line":213,"file":"HomePage.swift","message":"🔄 场景状态变化: inactive -> active"}
+{"timestamp":"2026-01-18T03:22:26Z","line":216,"file":"HomePage.swift","message":"✅ App 进入活跃状态"}
+{"timestamp":"2026-01-18T03:22:26Z","file":"HomePage.swift","message":"🔄 场景状态变化: active -> inactive","line":213}
+{"timestamp":"2026-01-18T03:22:26Z","file":"HomePage.swift","message":"⏸️ App 进入非活跃状态","line":218}
+{"line":76,"message":"📱 App 进入后台，记录状态: false","timestamp":"2026-01-18T03:22:27Z","file":"HomePageViewModel.swift"}
+{"line":38,"timestamp":"2026-01-18T04:36:06Z","message":"📍 LocationService 初始化","file":"LocationService.swift"}
+{"line":50,"timestamp":"2026-01-18T04:36:06Z","message":"🔐 定位权限状态: 始终允许","file":"LocationService.swift"}
+{"line":53,"timestamp":"2026-01-18T04:36:06Z","message":"✅ 后台定位已启用","file":"LocationService.swift"}
+{"line":65,"timestamp":"2026-01-18T04:36:06Z","message":"🔔 设置定位权限监听","file":"LocationService.swift"}
+{"line":77,"timestamp":"2026-01-18T04:36:06Z","message":"📡 开始订阅位置更新","file":"LocationService.swift"}
+{"line":53,"timestamp":"2026-01-18T04:36:06Z","message":"🚀 HomePageViewModel 初始化","file":"HomePageViewModel.swift"}
+{"line":145,"timestamp":"2026-01-18T04:36:06Z","message":"📡 开始订阅速度数据","file":"HomePageViewModel.swift"}
+{"line":158,"timestamp":"2026-01-18T04:36:06Z","message":"📡 开始订阅海拔数据","file":"HomePageViewModel.swift"}
+{"line":169,"timestamp":"2026-01-18T04:36:06Z","message":"📡 开始订阅爬升高度数据","file":"HomePageViewModel.swift"}
+{"timestamp":"2026-01-18T04:36:06Z","message":"🔔 设置后台状态监听","line":70,"file":"HomePageViewModel.swift"}
+{"timestamp":"2026-01-18T04:36:06Z","file":"HomePage.swift","message":"🗺️ HomePage 地图视图已显示","line":31}
+{"timestamp":"2026-01-18T04:36:06Z","file":"HomePage.swift","message":"📱 HomePage 视图已显示","line":207}
+{"timestamp":"2026-01-18T04:36:06Z","file":"LocationService.swift","message":"📍 位置更新: (24.187269, 120.708588), 精度: 8.1m","line":89}
+{"timestamp":"2026-01-18T04:36:06Z","file":"HomePageViewModel.swift","message":"⛰️ 海拔更新: 144.7 m","line":163}
+{"message":"🔐 定位权限状态: 始终允许","timestamp":"2026-01-18T04:36:06Z","line":50,"file":"LocationService.swift"}
+{"message":"✅ 后台定位已启用","timestamp":"2026-01-18T04:36:06Z","line":53,"file":"LocationService.swift"}
+{"message":"🔄 场景状态变化: inactive -> active","file":"HomePage.swift","line":213,"timestamp":"2026-01-18T04:36:06Z"}
+{"message":"✅ App 进入活跃状态","file":"HomePage.swift","line":216,"timestamp":"2026-01-18T04:36:06Z"}
+{"line":170,"timestamp":"2026-01-18T04:36:08Z","file":"HomePage.swift","message":"👆 用户点击：开始记录按钮"}
+{"line":170,"timestamp":"2026-01-18T04:36:08Z","file":"LocationService.swift","message":"📊 后台定位状态检查:"}
+{"line":171,"timestamp":"2026-01-18T04:36:08Z","file":"LocationService.swift","message":"  - 授权状态: 始终允许"}
+{"line":172,"timestamp":"2026-01-18T04:36:08Z","file":"LocationService.swift","message":"  - 后台定位: ✅ 已启用"}
+{"line":173,"timestamp":"2026-01-18T04:36:08Z","file":"LocationService.swift","message":"  - 当前位置: ✅ 有效"}
+{"line":174,"timestamp":"2026-01-18T04:36:08Z","file":"LocationService.swift","message":"  - 定位精度: 很好 (<20m)"}
+{"line":208,"timestamp":"2026-01-18T04:36:08Z","file":"LocationService.swift","message":"🔍 后台定位条件检查:"}
+{"line":209,"timestamp":"2026-01-18T04:36:08Z","file":"LocationService.swift","message":"  ✅ 定位权限已授予"}
+{"line":209,"timestamp":"2026-01-18T04:36:08Z","file":"LocationService.swift","message":"  ✅ 位置数据有效"}
+{"line":209,"timestamp":"2026-01-18T04:36:08Z","file":"LocationService.swift","message":"  ✅ 定位精度良好"}
+{"line":200,"timestamp":"2026-01-18T04:36:08Z","file":"HomePageViewModel.swift","message":"✅ 开始记录轨迹"}
+{"line":248,"timestamp":"2026-01-18T04:36:08Z","file":"HomePageViewModel.swift","message":"📡 位置数据订阅已建立"}
+{"timestamp":"2026-01-18T04:36:15Z","file":"HomePageViewModel.swift","message":"📈 爬升高度更新: 1.9 m","line":175}
+{"timestamp":"2026-01-18T04:36:15Z","line":163,"message":"⛰️ 海拔更新: 154.3 m","file":"HomePageViewModel.swift"}
+{"timestamp":"2026-01-18T04:36:15Z","line":330,"message":"🗺️ Polyline 已更新，坐标点数: 2","file":"HomePageViewModel.swift"}
+{"timestamp":"2026-01-18T04:36:19Z","line":76,"file":"HomePageViewModel.swift","message":"📱 App 进入后台，记录状态: true"}
+{"timestamp":"2026-01-18T04:36:19Z","line":106,"file":"HomePageViewModel.swift","message":"🌙 开始后台任务"}
+{"timestamp":"2026-01-18T04:36:19Z","line":114,"file":"HomePageViewModel.swift","message":"🆔 后台任务 ID: 5"}
+{"timestamp":"2026-01-18T04:36:19Z","line":119,"file":"HomePageViewModel.swift","message":"⏱️ 后台剩余时间: 179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.0 秒"}
+{"timestamp":"2026-01-18T04:36:19Z","line":213,"file":"HomePage.swift","message":"🔄 场景状态变化: active -> background"}
+{"timestamp":"2026-01-18T04:36:19Z","line":220,"file":"HomePage.swift","message":"🌙 App 进入后台状态，记录中: true"}
+{"file":"HomePageViewModel.swift","timestamp":"2026-01-18T04:36:44Z","line":110,"message":"⏰ 后台时间即将耗尽"}
+{"file":"HomePageViewModel.swift","timestamp":"2026-01-18T04:36:44Z","line":129,"message":"🌙 结束后台任务，ID: 5"}
+{"file":"HomePageViewModel.swift","message":"📱 App 进入前台，轨迹点数: 2","timestamp":"2026-01-18T04:44:55Z","line":87}
+{"file":"HomePage.swift","message":"🔄 场景状态变化: background -> inactive","timestamp":"2026-01-18T04:44:55Z","line":213}
+{"file":"HomePage.swift","message":"⏸️ App 进入非活跃状态","timestamp":"2026-01-18T04:44:55Z","line":218}
+{"file":"LocationService.swift","timestamp":"2026-01-18T04:44:55Z","line":89,"message":"📍 位置更新: (24.171881, 120.688156), 精度: 8.9m"}
+{"file":"HomePageViewModel.swift","timestamp":"2026-01-18T04:44:55Z","line":175,"message":"📈 爬升高度更新: 1.9 m"}
+{"file":"HomePageViewModel.swift","timestamp":"2026-01-18T04:44:55Z","line":163,"message":"⛰️ 海拔更新: 128.7 m"}
+{"timestamp":"2026-01-18T04:44:56Z","file":"LocationService.swift","line":50,"message":"🔐 定位权限状态: 始终允许"}
+{"timestamp":"2026-01-18T04:44:56Z","file":"LocationService.swift","line":53,"message":"✅ 后台定位已启用"}
+{"line":213,"message":"🔄 场景状态变化: inactive -> active","timestamp":"2026-01-18T04:44:56Z","file":"HomePage.swift"}
+{"line":216,"message":"✅ App 进入活跃状态","timestamp":"2026-01-18T04:44:56Z","file":"HomePage.swift"}
+{"line":213,"timestamp":"2026-01-18T04:44:59Z","file":"HomePage.swift","message":"🔄 场景状态变化: active -> inactive"}
+{"line":218,"timestamp":"2026-01-18T04:44:59Z","file":"HomePage.swift","message":"⏸️ App 进入非活跃状态"}
+{"message":"📱 App 进入后台，记录状态: true","line":76,"timestamp":"2026-01-18T04:45:00Z","file":"HomePageViewModel.swift"}
+{"message":"🌙 开始后台任务","line":106,"timestamp":"2026-01-18T04:45:00Z","file":"HomePageViewModel.swift"}
+{"message":"🆔 后台任务 ID: 14","line":114,"timestamp":"2026-01-18T04:45:00Z","file":"HomePageViewModel.swift"}
+{"message":"⏱️ 后台剩余时间: 179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.0 秒","line":119,"timestamp":"2026-01-18T04:45:00Z","file":"HomePageViewModel.swift"}
+{"message":"🔄 场景状态变化: inactive -> background","line":213,"timestamp":"2026-01-18T04:45:00Z","file":"HomePage.swift"}
+{"message":"🌙 App 进入后台状态，记录中: true","line":220,"timestamp":"2026-01-18T04:45:00Z","file":"HomePage.swift"}
+{"timestamp":"2026-01-18T04:45:21Z","file":"LocationService.swift","line":89,"message":"📍 位置更新: (24.171932, 120.687779), 精度: 9.5m"}
+{"timestamp":"2026-01-18T04:45:21Z","line":175,"file":"HomePageViewModel.swift","message":"📈 爬升高度更新: 1.9 m"}
+{"timestamp":"2026-01-18T04:45:21Z","line":163,"file":"HomePageViewModel.swift","message":"⛰️ 海拔更新: 130.4 m"}
+{"message":"⏰ 后台时间即将耗尽","file":"HomePageViewModel.swift","timestamp":"2026-01-18T04:45:26Z","line":110}
+{"message":"🌙 结束后台任务，ID: 14","file":"HomePageViewModel.swift","timestamp":"2026-01-18T04:45:26Z","line":129}
+{"line":38,"timestamp":"2026-01-18T05:18:09Z","file":"LocationService.swift","message":"📍 LocationService 初始化"}
+{"line":50,"timestamp":"2026-01-18T05:18:09Z","file":"LocationService.swift","message":"🔐 定位权限状态: 始终允许"}
+{"line":53,"timestamp":"2026-01-18T05:18:09Z","file":"LocationService.swift","message":"✅ 后台定位已启用"}
+{"line":65,"timestamp":"2026-01-18T05:18:09Z","file":"LocationService.swift","message":"🔔 设置定位权限监听"}
+{"line":77,"timestamp":"2026-01-18T05:18:09Z","file":"LocationService.swift","message":"📡 开始订阅位置更新"}
+{"line":53,"timestamp":"2026-01-18T05:18:09Z","file":"HomePageViewModel.swift","message":"🚀 HomePageViewModel 初始化"}
+{"line":145,"timestamp":"2026-01-18T05:18:09Z","file":"HomePageViewModel.swift","message":"📡 开始订阅速度数据"}
+{"line":158,"timestamp":"2026-01-18T05:18:09Z","file":"HomePageViewModel.swift","message":"📡 开始订阅海拔数据"}
+{"line":169,"timestamp":"2026-01-18T05:18:09Z","file":"HomePageViewModel.swift","message":"📡 开始订阅爬升高度数据"}
+{"line":70,"timestamp":"2026-01-18T05:18:09Z","file":"HomePageViewModel.swift","message":"🔔 设置后台状态监听"}
+{"line":31,"timestamp":"2026-01-18T05:18:09Z","file":"HomePage.swift","message":"🗺️ HomePage 地图视图已显示"}
+{"line":207,"timestamp":"2026-01-18T05:18:09Z","file":"HomePage.swift","message":"📱 HomePage 视图已显示"}
+{"message":"📍 位置更新: (24.169681, 120.687037), 精度: 13.3m","line":89,"timestamp":"2026-01-18T05:18:09Z","file":"LocationService.swift"}
+{"message":"📍 位置更新: (24.169681, 120.687037), 精度: 13.3m","line":89,"timestamp":"2026-01-18T05:18:09Z","file":"LocationService.swift"}
+{"line":89,"timestamp":"2026-01-18T05:18:09Z","file":"LocationService.swift","message":"📍 位置更新: (24.169681, 120.687037), 精度: 15.6m"}
+{"line":163,"timestamp":"2026-01-18T05:18:09Z","file":"HomePageViewModel.swift","message":"⛰️ 海拔更新: 156.1 m"}
+{"file":"LocationService.swift","timestamp":"2026-01-18T05:18:09Z","message":"🔐 定位权限状态: 始终允许","line":50}
+{"file":"LocationService.swift","timestamp":"2026-01-18T05:18:09Z","message":"✅ 后台定位已启用","line":53}
+{"file":"HomePage.swift","line":213,"timestamp":"2026-01-18T05:18:09Z","message":"🔄 场景状态变化: inactive -> active"}
+{"file":"HomePage.swift","line":216,"timestamp":"2026-01-18T05:18:09Z","message":"✅ App 进入活跃状态"}
+{"line":213,"file":"HomePage.swift","message":"🔄 场景状态变化: active -> inactive","timestamp":"2026-01-18T05:18:21Z"}
