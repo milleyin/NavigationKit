@@ -58,6 +58,19 @@ public struct GeoPoint: Sendable, Equatable {
      */
     public let course: Double?
 
+    /**
+     水平定位精度（单位：米）。
+     
+     - Important:
+       表示坐标的可信半径，值越小越精确。
+       `nil` 或负值表示精度信息不可用。
+       该值可用于过滤低质量的 GPS 点（如隧道、室内、高楼遮挡等场景）。
+     
+     - Note:
+       来自 `CLLocation.horizontalAccuracy`。
+     */
+    public let horizontalAccuracy: Double?
+
     // MARK: - 初始化
     
     /**
@@ -70,14 +83,16 @@ public struct GeoPoint: Sendable, Equatable {
        - timestamp: 采样时间
        - speed: 可选的原生速度（米/秒）
        - course: 可选的航向角（度）
+       - horizontalAccuracy: 可选的水平定位精度（米）
      */
-    public init(latitude: Double, longitude: Double, altitude: Double, timestamp: Date, speed: Double? = nil, course: Double? = nil) {
+    public init(latitude: Double, longitude: Double, altitude: Double, timestamp: Date, speed: Double? = nil, course: Double? = nil, horizontalAccuracy: Double? = nil) {
         self.latitude = latitude
         self.longitude = longitude
         self.altitude = altitude
         self.timestamp = timestamp
         self.speed = speed
         self.course = course
+        self.horizontalAccuracy = horizontalAccuracy
     }
 
     // MARK: - 便利初始化（从 CoreLocation 构造）
@@ -96,5 +111,6 @@ public struct GeoPoint: Sendable, Equatable {
         self.timestamp = location.timestamp
         self.speed = location.speed >= 0 ? location.speed : nil // CoreLocation 负值代表无速度
         self.course = location.course >= 0 ? location.course : nil
+        self.horizontalAccuracy = location.horizontalAccuracy >= 0 ? location.horizontalAccuracy : nil
     }
 }

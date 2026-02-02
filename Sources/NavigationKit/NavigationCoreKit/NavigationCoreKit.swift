@@ -16,7 +16,7 @@ import Foundation
 public enum NavigationCoreKit {
     
     /// NavigationCoreKit 当前版本号
-    public static let version: String = "1.0.0(20250231)"
+    public static let version: String = "1.1.0(20250232)"
     
     /// 是否开启调试日志输出
     public static var isDebugLoggingEnabled: Bool = false

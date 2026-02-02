@@ -35,6 +35,9 @@ public final class TrackCleaner {
     /// 最小时间间隔（秒），小于该值的点将被视为重复/异常
     private let minimumTimeInterval: TimeInterval
 
+    /// 最大可接受的水平定位精度（米）
+    private let maximumAcceptableAccuracy: Double
+
     // MARK: - Init
 
     /**
@@ -47,11 +50,13 @@ public final class TrackCleaner {
        - maximumReasonableSpeed: 最大合理速度（m/s）
        - maximumAltitudeJump: 最大单次海拔跳变（米）
        - minimumTimeInterval: 最小时间间隔（秒）
+       - maximumAcceptableAccuracy: 最大可接受的水平定位精度（米）
      */
-    public init(maximumReasonableSpeed: Double, maximumAltitudeJump: Double, minimumTimeInterval: TimeInterval) {
+    public init(maximumReasonableSpeed: Double, maximumAltitudeJump: Double, minimumTimeInterval: TimeInterval, maximumAcceptableAccuracy: Double = 100.0) {
         self.maximumReasonableSpeed = maximumReasonableSpeed
         self.maximumAltitudeJump = maximumAltitudeJump
         self.minimumTimeInterval = minimumTimeInterval
+        self.maximumAcceptableAccuracy = maximumAcceptableAccuracy
     }
 
     // MARK: - Public API (Streaming)
@@ -76,19 +81,24 @@ public final class TrackCleaner {
         // 1) 基础合法性
         guard isValidCoordinate(point) else { return nil }
 
+        // 2) 精度检查：过滤低质量 GPS 点
+        if let accuracy = point.horizontalAccuracy, accuracy > maximumAcceptableAccuracy {
+            return nil
+        }
+
         // 第一个点永远接受
         guard let last = last else { return point }
 
-        // 2) 时间检查：倒退 / 过密
+        // 3) 时间检查：倒退 / 过密
         let dt = point.timestamp.timeIntervalSince(last.timestamp)
         if dt <= 0 { return nil }
         if dt < minimumTimeInterval { return nil }
 
-        // 3) 海拔突变检查
+        // 4) 海拔突变检查
         let altitudeJump = abs(point.altitude - last.altitude)
         if altitudeJump > maximumAltitudeJump { return nil }
 
-        // 4) 速度异常检查：优先用点自带 speed，否则用两点估算
+        // 5) 速度异常检查：优先用点自带 speed，否则用两点估算
         let speed: Double = {
             if let s = point.speed, s.isFinite, s >= 0 {
                 return s
@@ -204,6 +214,12 @@ extension TrackCleaner {
         /// - Default: `0.2` (即最高支持 5Hz 采样率)
         public var minTimeInterval: TimeInterval = 0.2
         
+        /// 最大可接受的水平定位精度（米）。
+        ///
+        /// 超过此精度阈值的点将被直接丢弃，用于过滤低质量 GPS 数据（如隧道、地下停车场、室内等场景）。
+        /// - Default: `100.0`
+        public var maxAcceptableAccuracy: Double = 100.0
+        
         /// 使用默认值初始化配置。
         public init() {}
     }
@@ -217,7 +233,8 @@ extension TrackCleaner {
         self.init(
             maximumReasonableSpeed: config.maxReasonableSpeed,
             maximumAltitudeJump: config.maxAltitudeJump,
-            minimumTimeInterval: config.minTimeInterval
+            minimumTimeInterval: config.minTimeInterval,
+            maximumAcceptableAccuracy: config.maxAcceptableAccuracy
         )
     }
 }

@@ -76,6 +76,18 @@ public final class TrackEngine {
             c.stopDetection.speedThreshold = 0.1
             return c
         }()
+        public static let driving: Config = {
+            var c = Config()
+            // 驾驶场景：更高速度阈值、更严格的精度要求
+            c.cleaner?.maxReasonableSpeed = 60 // 216 km/h
+            c.cleaner?.maxAltitudeJump = 100
+            c.cleaner?.maxAcceptableAccuracy = 100
+            c.cleaner?.minTimeInterval = 1.0
+            c.stopDetection.speedThreshold = 0.5 // ~2 km/h
+            c.stopDetection.minDuration = 60 // 1 分钟
+            c.analyzer.movingSpeedThreshold = 1.0 // ~3.6 km/h
+            return c
+        }()
         
         public init() {}
     }
