@@ -57,67 +57,71 @@ public final class TrackAnalyzer {
      */
     public func process(_ current: GeoPoint, last: GeoPoint?, summary: RouteSummary) -> RouteSummary {
 
-        // MARK: - 点数
+        // 点数
         let newPointCount = summary.pointCount + 1
 
-        // MARK: - 起点 / 终点
+        // 起点 / 终点
         let startPoint = summary.startPoint ?? current
         let endPoint = current
 
-        // MARK: - 时间统计
+        // 时间统计
         var totalTime = summary.totalTime
         var movingTime = summary.movingTime
         var stoppedTime = summary.stoppedTime
+        
+        // 距离统计
+        var totalDistance = summary.totalDistance
+        
+        // 速度统计
+        var maxSpeed = summary.maxSpeed
 
         if let last = last {
             let deltaTime = current.timestamp.timeIntervalSince(last.timestamp)
             if deltaTime > 0 {
                 totalTime += deltaTime
 
-                let speed = max(current.speed ?? 0, 0)
-//                if speed > 0.5 {   // 0.5 m/s 作为“移动阈值”（≈ 1.8 km/h）
-//                    movingTime += deltaTime
-//                } else {
-//                    stoppedTime += deltaTime
-//                }
+                // 1) 先计算距离（可能需要用于速度推断和距离累加）
+                let distance = GeoDistance.distance(from: last, to: current)
+                
+                // 2) 确定速度：优先使用 GPS 速度，否则基于位移推断
+                let speed: Double
+                if let reportedSpeed = current.speed, reportedSpeed >= 0 {
+                    speed = reportedSpeed
+                } else {
+                    // 后台模式常见：speed 为 nil 或 -1，基于位移推断
+                    // 确保距离有效，避免 NaN/Inf 传播
+                    speed = (distance.isFinite && distance >= 0) ? (distance / deltaTime) : 0
+                }
+
+                // 3) 更新最大速度
+                maxSpeed = max(maxSpeed, speed)
+                
+                // 4) 判定移动/静止
                 if speed > movingSpeedThreshold {
                     movingTime += deltaTime
+                    
+                    // 只有移动时才累加距离，过滤静止时的 GPS 漂移
+                    if distance.isFinite && distance > 0 {
+                        totalDistance += distance
+                    }
                 } else {
                     stoppedTime += deltaTime
                 }
             }
         }
 
-        // MARK: - 距离统计
-        var totalDistance = summary.totalDistance
-
-        if let last = last {
-            let currentSpeed = max(current.speed ?? 0, 0)
-            // 只有速度超过移动阈值时才累加距离，过滤静止时的 GPS 漂移
-            if currentSpeed > movingSpeedThreshold {
-                let distance = GeoDistance.distance(from: last, to: current)
-                if distance.isFinite && distance > 0 {
-                    totalDistance += distance
-                }
-            }
-        }
-
-        // MARK: - 速度统计
-        let currentSpeed = max(current.speed ?? 0, 0)
-        let maxSpeed = max(summary.maxSpeed, currentSpeed)
-
         let averageSpeed: Double = {
             guard movingTime > 0 else { return 0 }
             return totalDistance / movingTime
         }()
 
-        // MARK: - 有效性判断
+        // 有效性判断
         let isValid = newPointCount >= minimumValidPointCount && totalDistance > 0
 
         return RouteSummary(
             isValid: isValid,
             pointCount: newPointCount,
-            segmentCount: summary.segmentCount, // 后续由 SegmentAnalyzer 填
+            segmentCount: summary.segmentCount,
             totalDistance: totalDistance,
             averageSpeed: averageSpeed,
             maxSpeed: maxSpeed,

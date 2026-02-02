@@ -162,6 +162,148 @@ class RouteAnalysisTests: XCTestCase {
     }
 
     /**
+     测试 TrackAnalyzer：GPS 提供速度时优先使用 GPS 速度。
+     */
+    func testAnalyzer_UsesGPSSpeedWhenAvailable() {
+        let analyzer = TrackAnalyzer(movingSpeedThreshold: 0.5)
+
+        // 两点距离约 11.1m，时间间隔 10s
+        // 按位移推断速度应为 ~1.1 m/s，但 GPS 报告速度为 5 m/s
+        let p1 = makePoint(lat: 30.0, lon: 120.0, offset: 0, speed: 0)
+        let p2 = makePoint(lat: 30.0001, lon: 120.0, offset: 10, speed: 5.0) // GPS 速度 5 m/s
+
+        let summary1 = analyzer.process(p1, last: nil, summary: .empty)
+        let summary2 = analyzer.process(p2, last: p1, summary: summary1)
+
+        // 验证：应使用 GPS 提供的 5 m/s，而非推断的 ~1.1 m/s
+        XCTAssertEqual(summary2.maxSpeed, 5.0, accuracy: 0.1, "应使用 GPS 提供的速度")
+        XCTAssertGreaterThan(summary2.movingTime, 0, "速度超过阈值，应计入移动时间")
+        XCTAssertGreaterThan(summary2.totalDistance, 0, "速度超过阈值，应累加距离")
+    }
+
+    /**
+     测试 TrackAnalyzer：GPS 无速度时基于位移推断速度。
+     */
+    func testAnalyzer_InfersSpeedWhenGPSUnavailable() {
+        let analyzer = TrackAnalyzer(movingSpeedThreshold: 0.5)
+
+        // 纬度差 0.0009 度（约 100m），时间间隔 10s
+        // 推断速度应为 ~10 m/s
+        let p1 = makePoint(lat: 30.0, lon: 120.0, offset: 0, speed: nil) // 无 GPS 速度
+        let p2 = makePoint(lat: 30.0009, lon: 120.0, offset: 10, speed: nil) // 无 GPS 速度
+
+        let summary1 = analyzer.process(p1, last: nil, summary: .empty)
+        let summary2 = analyzer.process(p2, last: p1, summary: summary1)
+
+        // 验证：应基于位移推断速度 ~10 m/s
+        XCTAssertEqual(summary2.maxSpeed, 10.0, accuracy: 1.0, "应基于位移推断速度")
+        XCTAssertGreaterThan(summary2.movingTime, 0, "推断速度超过阈值，应计入移动时间")
+        XCTAssertEqual(summary2.totalDistance, 100.0, accuracy: 10.0, "应累加约 100m 距离")
+    }
+
+    /**
+     测试 TrackAnalyzer：GPS 速度为负值时按无效处理，基于位移推断。
+     */
+    func testAnalyzer_HandlesNegativeGPSSpeed() {
+        let analyzer = TrackAnalyzer(movingSpeedThreshold: 0.5)
+
+        // GPS 速度为 -1（CoreLocation 的无效标记）
+        let p1 = makePoint(lat: 30.0, lon: 120.0, offset: 0, speed: -1) // 无效速度
+        let p2 = makePoint(lat: 30.0009, lon: 120.0, offset: 10, speed: -1) // 无效速度
+
+        let summary1 = analyzer.process(p1, last: nil, summary: .empty)
+        let summary2 = analyzer.process(p2, last: p1, summary: summary1)
+
+        // 验证：应忽略负值，基于位移推断速度
+        XCTAssertGreaterThan(summary2.maxSpeed, 5.0, "应忽略负值速度，基于位移推断")
+        XCTAssertGreaterThan(summary2.totalDistance, 50.0, "应累加距离")
+    }
+
+    /**
+     测试 TrackAnalyzer：处理异常距离（NaN/Inf）时不会崩溃。
+     
+     注意：这个测试假设 GeoDistance.distance 在某些极端情况下可能返回 NaN/Inf。
+     正常情况下不太可能发生，但代码应具备防御性。
+     */
+    func testAnalyzer_HandlesInvalidDistance() {
+        let analyzer = TrackAnalyzer(movingSpeedThreshold: 0.5)
+
+        // 使用相同的点（距离为 0）
+        let p1 = makePoint(lat: 30.0, lon: 120.0, offset: 0, speed: nil)
+        let p2 = makePoint(lat: 30.0, lon: 120.0, offset: 10, speed: nil) // 同一位置
+
+        let summary1 = analyzer.process(p1, last: nil, summary: .empty)
+        let summary2 = analyzer.process(p2, last: p1, summary: summary1)
+
+        // 验证：距离为 0，推断速度为 0，应计入静止时间
+        XCTAssertEqual(summary2.maxSpeed, 0, accuracy: 0.01, "距离为 0 时推断速度应为 0")
+        XCTAssertEqual(summary2.totalDistance, 0, accuracy: 0.01, "距离为 0 时不应累加")
+        XCTAssertGreaterThan(summary2.stoppedTime, 0, "速度为 0 应计入静止时间")
+        XCTAssertEqual(summary2.movingTime, 0, "速度为 0 不应计入移动时间")
+    }
+
+    /**
+     测试 TrackAnalyzer：混合场景（有 GPS 速度 + 无 GPS 速度）。
+     */
+    func testAnalyzer_MixedSpeedSources() {
+        let analyzer = TrackAnalyzer(movingSpeedThreshold: 0.5)
+
+        // 第一段：有 GPS 速度
+        let p1 = makePoint(lat: 30.0, lon: 120.0, offset: 0, speed: 3.0)
+        let p2 = makePoint(lat: 30.0001, lon: 120.0, offset: 10, speed: 5.0) // GPS 速度
+
+        // 第二段：无 GPS 速度，需要推断
+        let p3 = makePoint(lat: 30.0003, lon: 120.0, offset: 20, speed: nil) // 无速度
+
+        var summary = RouteSummary.empty
+        summary = analyzer.process(p1, last: nil, summary: summary)
+        summary = analyzer.process(p2, last: p1, summary: summary)
+        summary = analyzer.process(p3, last: p2, summary: summary)
+
+        // 验证：maxSpeed 应为两段中的最大值
+        // 第一段 GPS: 5 m/s，第二段推断: ~22m/10s = 2.2 m/s
+        XCTAssertEqual(summary.maxSpeed, 5.0, accuracy: 0.1, "应记录最大速度")
+        XCTAssertEqual(summary.pointCount, 3, "应有 3 个点")
+        XCTAssertGreaterThan(summary.totalDistance, 30.0, "两段移动距离累加")
+        XCTAssertEqual(summary.movingTime, 20.0, accuracy: 0.1, "两段都在移动")
+    }
+
+    /**
+     测试 TrackAnalyzer：从静止到移动再到静止的完整场景。
+     */
+    func testAnalyzer_StopMoveStopSequence() {
+        let analyzer = TrackAnalyzer(movingSpeedThreshold: 1.0) // 1 m/s 阈值
+
+        // 阶段 1: 静止 (速度 0.5 m/s < 阈值)
+        let p1 = makePoint(lat: 30.0, lon: 120.0, offset: 0, speed: 0.5)
+        let p2 = makePoint(lat: 30.0, lon: 120.0, offset: 10, speed: 0.3)
+
+        // 阶段 2: 移动 (速度 5 m/s > 阈值)
+        let p3 = makePoint(lat: 30.001, lon: 120.0, offset: 20, speed: 5.0)
+
+        // 阶段 3: 再次静止 (速度 0.2 m/s < 阈值)
+        let p4 = makePoint(lat: 30.001, lon: 120.0, offset: 30, speed: 0.2)
+
+        var summary = RouteSummary.empty
+        summary = analyzer.process(p1, last: nil, summary: summary)
+        summary = analyzer.process(p2, last: p1, summary: summary)
+        summary = analyzer.process(p3, last: p2, summary: summary)
+        summary = analyzer.process(p4, last: p3, summary: summary)
+
+        // 验证：
+        // - 总时间: 30s
+        // - 移动时间: 10s (p2->p3)
+        // - 静止时间: 20s (p1->p2: 10s + p3->p4: 10s)
+        // - 总距离: 只有 p2->p3 的距离（约 111m）
+        XCTAssertEqual(summary.totalTime, 30.0, accuracy: 0.1)
+        XCTAssertEqual(summary.movingTime, 10.0, accuracy: 0.1, "只有中间阶段在移动")
+        XCTAssertEqual(summary.stoppedTime, 20.0, accuracy: 0.1, "首尾两阶段静止")
+        XCTAssertGreaterThan(summary.totalDistance, 100.0, "只累加移动阶段的距离")
+        XCTAssertLessThan(summary.totalDistance, 150.0, "静止阶段的漂移不累加")
+        XCTAssertEqual(summary.maxSpeed, 5.0, accuracy: 0.1)
+    }
+
+    /**
      测试 SegmentAnalyzer：能正确计算两点间的段落属性（距离、速度）。
      */
     func testSegmentAnalyzer_Calculation() {
