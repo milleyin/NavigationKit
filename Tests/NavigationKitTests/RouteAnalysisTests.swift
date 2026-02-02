@@ -106,6 +106,62 @@ class RouteAnalysisTests: XCTestCase {
     }
 
     /**
+     测试 TrackCleaner：能够丢弃低精度的 GPS 点。
+     */
+    func testCleaner_RejectsLowAccuracyPoints() {
+        let cleaner = TrackCleaner(maximumReasonableSpeed: 50, maximumAltitudeJump: 100, minimumTimeInterval: 0.5, maximumAcceptableAccuracy: 100.0)
+
+        // 模拟高精度点（可接受）
+        let goodPoint = GeoPoint(
+            latitude: 30.0,
+            longitude: 120.0,
+            altitude: 10,
+            timestamp: referenceDate,
+            speed: 5,
+            course: nil,
+            horizontalAccuracy: 10 // 10米精度，良好
+        )
+
+        // 模拟低精度点（应拒绝）
+        let badPoint = GeoPoint(
+            latitude: 30.0001,
+            longitude: 120.0001,
+            altitude: 12,
+            timestamp: referenceDate.addingTimeInterval(10),
+            speed: 5,
+            course: nil,
+            horizontalAccuracy: 150 // 150米精度，超过阈值
+        )
+
+        let accepted1 = cleaner.process(goodPoint, last: nil)
+        let accepted2 = cleaner.process(badPoint, last: accepted1)
+
+        XCTAssertNotNil(accepted1, "高精度点应被接受")
+        XCTAssertNil(accepted2, "低精度点应被丢弃")
+    }
+
+    /**
+     测试 TrackAnalyzer：静止时的 GPS 漂移不应累加到距离中。
+     */
+    func testAnalyzer_IgnoresDriftWhenStationary() {
+        let analyzer = TrackAnalyzer(movingSpeedThreshold: 0.5)
+
+        // 第一个点：静止状态
+        let p1 = makePoint(lat: 30.0, lon: 120.0, offset: 0, speed: 0.2) // 速度低于阈值
+        let summary1 = analyzer.process(p1, last: nil, summary: .empty)
+
+        // 第二个点：由于 GPS 漂移，位置偏移了 10米，但速度仍然很低
+        let p2 = makePoint(lat: 30.0001, lon: 120.0, offset: 10, speed: 0.2) // 速度低于阈值
+
+        let summary2 = analyzer.process(p2, last: p1, summary: summary1)
+
+        // 验证：尽管两点间有距离差异，但由于速度低于阈值，距离不应累加
+        XCTAssertEqual(summary2.totalDistance, 0, accuracy: 0.1, "静止时的漂移不应累加到总距离")
+        XCTAssertGreaterThan(summary2.stoppedTime, 0, "应计入静止时间")
+        XCTAssertEqual(summary2.movingTime, 0, "不应计入移动时间")
+    }
+
+    /**
      测试 SegmentAnalyzer：能正确计算两点间的段落属性（距离、速度）。
      */
     func testSegmentAnalyzer_Calculation() {

@@ -92,9 +92,13 @@ public final class TrackAnalyzer {
         var totalDistance = summary.totalDistance
 
         if let last = last {
-            let distance = GeoDistance.distance(from: last, to: current)
-            if distance.isFinite && distance > 0 {
-                totalDistance += distance
+            let currentSpeed = max(current.speed ?? 0, 0)
+            // 只有速度超过移动阈值时才累加距离，过滤静止时的 GPS 漂移
+            if currentSpeed > movingSpeedThreshold {
+                let distance = GeoDistance.distance(from: last, to: current)
+                if distance.isFinite && distance > 0 {
+                    totalDistance += distance
+                }
             }
         }
 
