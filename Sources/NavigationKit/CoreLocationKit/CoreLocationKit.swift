@@ -286,23 +286,23 @@ extension CoreLocationKit {
      提供基于当前位置的反向地理编码（地址解析）功能，并通过 `Publisher` 返回地址字符串。
      
      - Important: 该 `Publisher` 仅在 `currentLocation` 可用时执行，
-       若 `currentLocation == nil`，则直接返回 `LocationError.locationUnavailable`。
+     若 `currentLocation == nil`，则直接返回 `LocationError.locationUnavailable`。
      - Attention: 反向地理编码是异步操作，调用 `addressPublisher` 不会立即返回地址，
-       需要订阅 `Publisher` 以获取解析结果。
+     需要订阅 `Publisher` 以获取解析结果。
      - Warning: `CLGeocoder` 在短时间内调用过多次可能会被系统限制，影响解析功能。
      - Note: 返回的地址字符串格式如下：`街道, 门牌号, 城市, 省份, 邮政编码, 国家`。
      
      # 使用示例
      ```swift
      CoreLocationKit.shared.addressPublisher
-         .sink(receiveCompletion: { completion in
-             if case .failure(let error) = completion {
-                 print("地址解析失败: \(error)")
-             }
-         }, receiveValue: { address in
-             print("当前位置地址: \(address)")
-         })
-         .store(in: &subscriptions)
+     .sink(receiveCompletion: { completion in
+     if case .failure(let error) = completion {
+     print("地址解析失败: \(error)")
+     }
+     }, receiveValue: { address in
+     print("当前位置地址: \(address)")
+     })
+     .store(in: &subscriptions)
      ```
      
      - Returns: `AnyPublisher<String, Swift.Error>`，返回解析出的地址字符串，或错误。
@@ -405,7 +405,7 @@ extension CoreLocationKit {
      - parameter allowed: 是否允许后台定位，`true` 开启，`false` 关闭。
      */
     public func allowBackgroundLocationUpdates(_ allowed: Bool) {
-        #if os(iOS)
+#if os(iOS)
         guard CLLocationManager.authorizationStatus() == .authorizedAlways else {
             print("⚠️ 请启用 `Always` 授权，以允许后台更新位置")
             return
@@ -420,15 +420,14 @@ extension CoreLocationKit {
         locationManager.pausesLocationUpdatesAutomatically = !allowed
         
         if allowed {
-            print("✅ 后台定位已启用")
+            print("后台定位已启用")
         } else {
-            print("⏹️ 后台定位已关闭")
+            print("后台定位已关闭")
         }
-        #else
+#else
         print("⚠️ macOS 不支持后台定位更新功能")
-        #endif
+#endif
     }
-
 }
 
 //MARK: - 内部方法
