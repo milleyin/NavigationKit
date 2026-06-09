@@ -455,10 +455,14 @@ extension CoreLocationKit {
     /// 自定义错误类型
     public enum LocationError: Swift.Error, LocalizedError {
         case locationUnavailable
-        case locationServicesDisabled  // ✅ 定位服务未启用
-        case permissionDenied          // ✅ 用户未授权定位
+        //定位服务未启用
+        case locationServicesDisabled
+        //用户未授权定位
+        case permissionDenied
         case geoEncodingFailed(originalError: Swift.Error)
         case noAddressFound
+        /// 单次定位请求在指定时限内未取得位置
+        case timeout
 
         public var errorDescription: String? {
             switch self {
@@ -472,6 +476,8 @@ extension CoreLocationKit {
                 return "反向地理编码失败: \(originalError.localizedDescription)"
             case .noAddressFound:
                 return "未找到匹配的地址信息。"
+            case .timeout:
+                return "单次定位请求超时，未能在限定时间内取得位置。"
             }
         }
 
@@ -487,7 +493,99 @@ extension CoreLocationKit {
                 return "请检查网络连接，并尝试重新请求。"
             case .noAddressFound:
                 return "可能是偏远地区，尝试移动到其他位置。"
+            case .timeout:
+                return "定位环境可能暂时不佳（如室内或无网络定位）。可稍后重试，或改用持续订阅 locationPublisher"
             }
         }
+    }
+}
+
+// MARK: - 单次定位请求
+ 
+/**
+ 一次性定位请求的执行器。
+ 
+ 用于支撑 `CoreLocationKit.requestCurrentLocation(timeout:)` 的「请求一次」语义。每次单次请求都创建一个独立实例，持有自己**独立的** `CLLocationManager`，与 `CoreLocationKit` 主实例的持续定位（`locationPublisher` 背后的 manager）完全隔离。
+ 
+ - Important: 采用独立 manager 的根本原因——单次请求拿到位置后需要 `stop`，若复用主 manager 的 `stopUpdatingLocation()`，会**误停主实例的持续更新**，掐断其它正在订阅 `locationPublisher` 的使用者。独立实例彻底规避此冲突。
+ - Important: 本类必须在请求存续期间被强引用持有（由 `CoreLocationKit` 用集合持有），否则方法返回后实例即释放，`CLLocationManagerDelegate` 回调永不触发。请求终结（成功 / 失败 / 超时）后通过 `onFinish` 回调通知持有者解除持有。
+ - Note: macOS 上单次 `requestLocation()` 在弱定位环境下常直接回 `locationUnknown` 而放弃，故此处统一采用 `startUpdatingLocation()` 持续测量、**取得首个有效位置后立即停止**的策略，既信守「取一次」的省电语义，又比 `requestLocation()` 更稳。
+ - Warning: 不在此处重试。重试与否属调用方的业务策略 —— 调用方可对返回的 publisher 施加 `.retry(_:)`。SDK 只负责「请求一次，给结果或给错误」。
+ */
+private final class SingleLocationRequest: NSObject, CLLocationManagerDelegate {
+ 
+    /// 本次请求独享的定位管理器，与主实例隔离
+    private let manager = CLLocationManager()
+ 
+    /// 结果回调：成功传出位置，失败传出错误。仅会被调用一次
+    private let completion: (Result<CLLocation, Swift.Error>) -> Void
+ 
+    /// 请求终结后通知持有者解除强引用（避免实例泄漏）
+    private let onFinish: () -> Void
+ 
+    /// 超时计时器；取得结果或失败时取消
+    private var timeoutTimer: Timer?
+ 
+    /// 防止结果回调被多次触发（首个位置、超时、失败之间存在竞态）
+    private var hasCompleted = false
+ 
+    /**
+     创建并立即发起一次定位请求。
+ 
+     - Parameters:
+       - desiredAccuracy: 期望精度，沿用主实例的精度设置以保持一致。
+       - timeout: 超时时限（秒）。超时后以 `LocationError.timeout` 失败，不重试。
+       - completion: 唯一结果回调（成功位置 / 失败错误）。
+       - onFinish: 请求终结后调用，供持有者解除强引用。
+     */
+    init(desiredAccuracy: CLLocationAccuracy, timeout: TimeInterval, completion: @escaping (Result<CLLocation, Swift.Error>) -> Void, onFinish: @escaping () -> Void) {
+        self.completion = completion
+        self.onFinish = onFinish
+        super.init()
+ 
+        manager.delegate = self
+        manager.desiredAccuracy = desiredAccuracy
+ 
+        // 启动持续测量；取得首个有效位置后在 didUpdateLocations 内立即停止
+        manager.startUpdatingLocation()
+ 
+        // 启动超时计时器：到时仍无结果则以 timeout 失败
+        timeoutTimer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { [weak self] _ in
+            self?.finish(.failure(CoreLocationKit.LocationError.timeout))
+        }
+    }
+ 
+    /**
+     终结本次请求：停止定位、取消计时、回调结果、通知持有者解除持有。
+ 
+     - Parameter result: 本次请求的最终结果。
+     - Note: 通过 `hasCompleted` 保证整个生命周期内只终结一次。
+     */
+    private func finish(_ result: Result<CLLocation, Swift.Error>) {
+        guard !hasCompleted else { return }
+        hasCompleted = true
+ 
+        manager.stopUpdatingLocation()   // 仅停止本实例的独立 manager，不影响主实例
+        timeoutTimer?.invalidate()
+        timeoutTimer = nil
+ 
+        completion(result)
+        onFinish()
+    }
+ 
+    // MARK: CLLocationManagerDelegate
+ 
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        // 取首个有效位置即终结（满足「取一次」语义）
+        guard let location = locations.first else { return }
+        finish(.success(location))
+    }
+ 
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Swift.Error) {
+        // locationUnknown 表示「暂时未知、系统仍会重试」——单次语义下不等待，交由超时统一兜底
+        if let clError = error as? CLError, clError.code == .locationUnknown {
+            return
+        }
+        finish(.failure(error))
     }
 }
