@@ -367,6 +367,7 @@ extension CoreLocationKit {
         }
         #elseif os(macOS)
         let status = locationManager.authorizationStatus
+        print("📍 [诊断] 当前 macOS 授权状态原始值: \(status.rawValue) (\(status))")  // 临时诊断
         guard status == .authorizedAlways else {
             errorSubject.send(LocationError.permissionDenied)
             print("⚠️ 当前没有定位权限，无法执行 requestLocation()")
