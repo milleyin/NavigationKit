@@ -35,9 +35,10 @@ final class AppleMapKitTests: XCTestCase {
     func testUserTrackingMode() {
         appleMapKit.setUserTrackingMode(.none)
         XCTAssertEqual(appleMapKit.userTrackingMode, .none, "用户追踪模式未正确设置")
-        
+        #if os(iOS)
         appleMapKit.setUserTrackingMode(.followWithHeading)
         XCTAssertEqual(appleMapKit.userTrackingMode, .followWithHeading, "用户追踪模式未正确切换为 followWithHeading")
+        #endif
     }
     
     /// 测试添加标记
