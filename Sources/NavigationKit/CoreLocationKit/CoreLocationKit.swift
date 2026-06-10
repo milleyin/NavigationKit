@@ -357,8 +357,7 @@ extension CoreLocationKit {
      - Parameter timeout: 超时时限（秒），默认 10。超时即以 `LocationError.timeout` 失败。
      - Returns: 发出**单个** `CLLocation` 后立即完成的 publisher；失败时发出错误。
      - Note: 是否重试由调用方决定——可对返回值施加 `.retry(_:)`。SDK 不内置重试。
-     - Note: 若只需「此刻的缓存位置、可能为 nil」，应改用 `currentLocation` 属性，零等待零耗电；
-     若需持续跟踪，应订阅 `locationPublisher`。
+     - Note: 若只需「此刻的缓存位置、可能为 nil」，应改用 `currentLocation` 属性，零等待零耗电；若需持续跟踪，应订阅 `locationPublisher`。
      - Example:
      ```swift
      CoreLocationKit.shared.requestCurrentLocation()
@@ -371,19 +370,10 @@ extension CoreLocationKit {
      ```
      */
     public func requestCurrentLocation(timeout: TimeInterval = 10) -> AnyPublisher<CLLocation, Swift.Error> {
-        // 前置校验：定位服务总开关
-        guard CLLocationManager.locationServicesEnabled() else {
-            return Fail(error: LocationError.locationServicesDisabled).eraseToAnyPublisher()
-        }
-        
-        // 前置校验：授权状态。接受 whenInUse / always，iOS/macOS 拉平
-#if os(iOS)
-        let status = CLLocationManager.authorizationStatus()
-#elseif os(macOS)
-        let status = locationManager.authorizationStatus
-#endif
-        guard status == .authorizedWhenInUse || status == .authorizedAlways else {
-            return Fail(error: LocationError.permissionDenied).eraseToAnyPublisher()
+        // 前置校验：复用 currentLocationReadiness（其内部走纯函数 validatePreconditions），
+        // 与应用层预检、单元测试共用同一套判定逻辑，避免白名单在多处各写一份而走样。
+        if let blocker = currentLocationReadiness() {
+            return Fail(error: blocker).eraseToAnyPublisher()
         }
         
         // 用 Future 桥接「独立请求实例的回调」到 Combine
@@ -396,7 +386,10 @@ extension CoreLocationKit {
             // 关键的生命周期处理：用一个 box 持有 request 引用，
             // 以便在 onFinish 里把同一个实例从 pendingSingleRequests 中移除。
             var requestRef: SingleLocationRequest?
-            let request = SingleLocationRequest(desiredAccuracy: self.locationManager.desiredAccuracy, timeout: timeout, completion: { result in
+            let request = SingleLocationRequest(
+                desiredAccuracy: self.locationManager.desiredAccuracy,
+                timeout: timeout,
+                completion: { result in
                     promise(result)
                 },
                 onFinish: { [weak self] in
@@ -456,6 +449,54 @@ extension CoreLocationKit {
 #else
         print("⚠️ macOS 不支持后台定位更新功能")
 #endif
+    }
+}
+
+//MARK: - 前置条件校验
+extension CoreLocationKit {
+    /**
+     校验发起定位请求的前置条件（纯函数）。
+     
+     不读取任何系统状态，仅依据传入的参数做判定，因此结果完全确定、可独立单元测试，并被 `requestCurrentLocation(timeout:)`、`currentLocationReadiness()` 共用，确保「授权白名单」只在此处定义一份，不会在多处各写一份而走样。
+     
+     - Parameters:
+     - servicesEnabled: 设备定位服务总开关是否开启。
+     - status: 当前定位授权状态。
+     - Returns: 不满足前置条件时返回对应的 `LocationError`；满足则返回 `nil`（可放行）。
+     - Note: 授权白名单是**平台相关**的——iOS 接受 `.authorizedWhenInUse` 与 `.authorizedAlways`；macOS 无 `.authorizedWhenInUse` 这一 case，仅接受 `.authorizedAlways`。
+     */
+    static func validatePreconditions(servicesEnabled: Bool, status: CLAuthorizationStatus) -> LocationError? {
+        guard servicesEnabled else { return .locationServicesDisabled }
+        
+        // 授权白名单按平台区分：.authorizedWhenInUse 是 iOS 专属 case，macOS SDK 中不存在
+#if os(iOS)
+        let isAuthorized = (status == .authorizedWhenInUse || status == .authorizedAlways)
+#elseif os(macOS)
+        let isAuthorized = (status == .authorizedAlways)
+#endif
+        
+        guard isAuthorized else { return .permissionDenied }
+        return nil
+    }
+    
+    /**
+     查询当前是否满足发起定位请求的条件。
+     
+     读取系统实时的服务开关与授权状态，内部复用纯函数 `validatePreconditions(servicesEnabled:status:)`。供应用层在发起定位前做预检——例如据返回的错误提示用户「去开启定位服务」或「去授权」。
+     
+     - Returns: 满足条件返回 `nil`；否则返回阻碍发起的具体 `LocationError`。
+     - Note: 仅做「能否发起」的判定，不触发任何定位请求。
+     */
+    public func currentLocationReadiness() -> LocationError? {
+#if os(iOS)
+        let status = CLLocationManager.authorizationStatus()
+#elseif os(macOS)
+        let status = locationManager.authorizationStatus
+#endif
+        return Self.validatePreconditions(
+            servicesEnabled: CLLocationManager.locationServicesEnabled(),
+            status: status
+        )
     }
 }
 
