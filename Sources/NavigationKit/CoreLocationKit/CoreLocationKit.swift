@@ -350,60 +350,60 @@ extension CoreLocationKit {
      主动触发定位硬件获取**一个新的**位置，与「读取缓存快照」（`currentLocation`）和「持续订阅」（`locationPublisher`）是三种不同语义，互不替代。
      
      实现要点：
+     - **授权状态异步**：不在调用瞬间硬读授权状态（进程启动有「空窗期」，瞬时读会得到假 `notDetermined`），而是订阅授权状态、等其「就绪」（非 `notDetermined`）后再决策；尚未决定时先经收敛入口触发授权请求。已授权时因 `CurrentValueSubject` 重放当前值而零额外等待。
      - 使用一个**独立的** `CLLocationManager`（封装在 `SingleLocationRequest` 内）执行本次请求，与主实例的持续定位完全隔离，不会干扰正在订阅 `locationPublisher` 的使用者。
      - 取得首个有效位置后立即停止该独立 manager，信守「取一次、省电」的语义。
-     - 在 `timeout` 内未取得位置则以 `LocationError.timeout` 失败，**不自动重试**。
+     - 不自动重试。
      
-     - Parameter timeout: 超时时限（秒），默认 10。超时即以 `LocationError.timeout` 失败。
+     - Parameter timeout: 超时时限（秒），默认 10。涵盖「等待授权就绪」与「单次定位测量」——任一阶段超时均以 `LocationError.timeout` 失败。常态（已授权）下等待就绪近乎瞬时，timeout 实际作用于测量阶段。
      - Returns: 发出**单个** `CLLocation` 后立即完成的 publisher；失败时发出错误。
      - Note: 是否重试由调用方决定——可对返回值施加 `.retry(_:)`。SDK 不内置重试。
      - Note: 若只需「此刻的缓存位置、可能为 nil」，应改用 `currentLocation` 属性，零等待零耗电；若需持续跟踪，应订阅 `locationPublisher`。
      - Example:
-     ```swift
-     CoreLocationKit.shared.requestCurrentLocation()
-     .sink { completion in
-     if case .failure(let error) = completion { print(error) }
-     } receiveValue: { location in
-     print("取得位置: \(location)")
-     }
-     .store(in: &subscriptions)
-     ```
+        ```swift
+            CoreLocationKit.shared.requestCurrentLocation()
+                .sink { completion in
+                    if case .failure(let error) = completion { print(error) }
+                } receiveValue: { location in
+                    print("取得位置: \(location)")
+                }
+                .store(in: &subscriptions)
+        ```
      */
     public func requestCurrentLocation(timeout: TimeInterval = 10) -> AnyPublisher<CLLocation, Swift.Error> {
-        // 前置校验：复用 currentLocationReadiness（其内部走纯函数 validatePreconditions），
-        // 与应用层预检、单元测试共用同一套判定逻辑，避免白名单在多处各写一份而走样。
-        if let blocker = currentLocationReadiness() {
-            return Fail(error: blocker).eraseToAnyPublisher()
+        // 步骤1：服务总开关无空窗期，可瞬时判断；关闭则直接失败，不必进入等待
+        guard CLLocationManager.locationServicesEnabled() else {
+            return Fail(error: LocationError.locationServicesDisabled).eraseToAnyPublisher()
         }
         
-        // 用 Future 桥接「独立请求实例的回调」到 Combine
-        return Future<CLLocation, Swift.Error> { [weak self] promise in
-            guard let self = self else {
-                promise(.failure(LocationError.locationUnavailable))
-                return
-            }
-            
-            // 关键的生命周期处理：用一个 box 持有 request 引用，
-            // 以便在 onFinish 里把同一个实例从 pendingSingleRequests 中移除。
-            var requestRef: SingleLocationRequest?
-            let request = SingleLocationRequest(
-                desiredAccuracy: self.locationManager.desiredAccuracy,
-                timeout: timeout,
-                completion: { result in
-                    promise(result)
-                },
-                onFinish: { [weak self] in
-                    // 请求终结后解除强持有，避免实例泄漏
-                    if let req = requestRef {
-                        self?.pendingSingleRequests.remove(req)
-                    }
-                }
+        // 步骤2：尚未决定授权时经收敛入口发起授权请求；已决定则为 no-op
+        requestAuthorizationIfNeeded()
+        
+        // 步骤3~5：订阅授权状态，等其「就绪」（非 notDetermined）后再决策。
+        // 不再瞬时读 status —— 授权状态是异步的，启动空窗期内瞬时读会得到假 notDetermined。
+        // authorizationStatusSubject 是 CurrentValueSubject，订阅即重放当前值：已授权时当前值即真值，
+        // filter 立即放行、零额外等待；空窗期当前值为 notDetermined，被滤掉，待 didChangeAuthorization 送真值后再放行。
+        return authorizationStatusPublisher
+            .filter { $0 != .notDetermined }
+            .first()
+            .setFailureType(to: Swift.Error.self)            // Never → Error，以承接下方 timeout 与 flatMap 的错误流
+            .timeout(
+                .seconds(timeout),
+                scheduler: DispatchQueue.main,
+                customError: { LocationError.timeout }        // 等就绪超时：回调迟迟不到则失败，不无限挂起
             )
-            requestRef = request
-            // 请求存续期间维持强引用
-            self.pendingSingleRequests.insert(request)
-        }
-        .eraseToAnyPublisher()
+            .flatMap { [weak self] status -> AnyPublisher<CLLocation, Swift.Error> in
+                guard let self = self else {
+                    return Fail(error: LocationError.locationUnavailable).eraseToAnyPublisher()
+                }
+                // 服务总开关已在步骤1校验，此处仅判授权白名单（denied / restricted → permissionDenied）
+                if let blocker = Self.validatePreconditions(servicesEnabled: true, status: status) {
+                    return Fail(error: blocker).eraseToAnyPublisher()
+                }
+                // 就绪且在白名单 → 发起单次定位；测量阶段超时由 SingleLocationRequest 内部计时负责
+                return self.makeSingleLocationRequest(timeout: timeout)
+            }
+            .eraseToAnyPublisher()
     }
     
     /**
@@ -533,6 +533,41 @@ extension CoreLocationKit {
         DispatchQueue.main.async {
             self.locationManager.requestWhenInUseAuthorization()
         }
+    }
+    
+    /**
+     创建并发起一次独立的单次定位请求，桥接为 Combine publisher。
+     
+     封装 `SingleLocationRequest` 的生命周期：请求存续期间由 `pendingSingleRequests` 维持强引用，终结后自动解除。仅由 `requestCurrentLocation(timeout:)` 在授权就绪后调用。
+     
+     - Parameter timeout: 单次测量的超时时限（秒），透传给 `SingleLocationRequest` 内部计时。
+     - Returns: 发出单个 `CLLocation` 后完成的 publisher；失败时发出错误。
+     */
+    private func makeSingleLocationRequest(timeout: TimeInterval) -> AnyPublisher<CLLocation, Swift.Error> {
+        Future<CLLocation, Swift.Error> { [weak self] promise in
+            guard let self = self else {
+                promise(.failure(LocationError.locationUnavailable))
+                return
+            }
+            // 用 requestRef 持有实例，以便 onFinish 时从 pendingSingleRequests 精确移除同一个实例
+            var requestRef: SingleLocationRequest?
+            let request = SingleLocationRequest(
+                desiredAccuracy: self.locationManager.desiredAccuracy,
+                timeout: timeout,
+                completion: { result in
+                    promise(result)
+                },
+                onFinish: { [weak self] in
+                    if let req = requestRef {
+                        self?.pendingSingleRequests.remove(req)
+                    }
+                }
+            )
+            requestRef = request
+            // 请求存续期间维持强引用，否则方法返回后实例释放、delegate 回调永不触发
+            self.pendingSingleRequests.insert(request)
+        }
+        .eraseToAnyPublisher()
     }
 }
 
