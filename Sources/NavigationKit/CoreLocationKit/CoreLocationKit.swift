@@ -549,21 +549,18 @@ extension CoreLocationKit {
                 promise(.failure(LocationError.locationUnavailable))
                 return
             }
-            // 用 requestRef 持有实例，以便 onFinish 时从 pendingSingleRequests 精确移除同一个实例
-            var requestRef: SingleLocationRequest?
             let request = SingleLocationRequest(
                 desiredAccuracy: self.locationManager.desiredAccuracy,
                 timeout: timeout,
                 completion: { result in
                     promise(result)
                 },
-                onFinish: { [weak self] in
-                    if let req = requestRef {
-                        self?.pendingSingleRequests.remove(req)
-                    }
+                onFinish: { [weak self] finished in
+                    // 终结时由 SingleLocationRequest 回传自身，据此解除持有——
+                    // 不再用外部 var 捕获，从根上消除「实例 → onFinish → 捕获变量 → 实例」的自持有环
+                    self?.pendingSingleRequests.remove(finished)
                 }
             )
-            requestRef = request
             // 请求存续期间维持强引用，否则方法返回后实例释放、delegate 回调永不触发
             self.pendingSingleRequests.insert(request)
         }
@@ -637,12 +634,13 @@ private final class SingleLocationRequest: NSObject, CLLocationManagerDelegate {
  
     /// 本次请求独享的定位管理器，与主实例隔离
     private let manager = CLLocationManager()
- 
+    // [LEAK-TEST] 临时验证实例释放，验证后删除
+    deinit { print("[LEAK-TEST] SingleLocationRequest 已释放") }
     /// 结果回调：成功传出位置，失败传出错误。仅会被调用一次
     private let completion: (Result<CLLocation, Swift.Error>) -> Void
  
-    /// 请求终结后通知持有者解除强引用（避免实例泄漏）
-    private let onFinish: () -> Void
+    /// 请求终结后回调，把「本次请求实例自身」交还持有者以便精确解除强引用（避免实例泄漏）
+    private let onFinish: (SingleLocationRequest) -> Void
  
     /// 超时计时器；取得结果或失败时取消
     private var timeoutTimer: Timer?
@@ -657,9 +655,9 @@ private final class SingleLocationRequest: NSObject, CLLocationManagerDelegate {
        - desiredAccuracy: 期望精度，沿用主实例的精度设置以保持一致。
        - timeout: 超时时限（秒）。超时后以 `LocationError.timeout` 失败，不重试。
        - completion: 唯一结果回调（成功位置 / 失败错误）。
-       - onFinish: 请求终结后调用，供持有者解除强引用。
+       - onFinish: 请求终结后调用，回传本实例自身，供持有者精确解除强引用。
      */
-    init(desiredAccuracy: CLLocationAccuracy, timeout: TimeInterval, completion: @escaping (Result<CLLocation, Swift.Error>) -> Void, onFinish: @escaping () -> Void) {
+    init(desiredAccuracy: CLLocationAccuracy, timeout: TimeInterval, completion: @escaping (Result<CLLocation, Swift.Error>) -> Void, onFinish: @escaping (SingleLocationRequest) -> Void) {
         self.completion = completion
         self.onFinish = onFinish
         super.init()
@@ -691,7 +689,7 @@ private final class SingleLocationRequest: NSObject, CLLocationManagerDelegate {
         timeoutTimer = nil
  
         completion(result)
-        onFinish()
+        onFinish(self)
     }
  
     // MARK: CLLocationManagerDelegate
