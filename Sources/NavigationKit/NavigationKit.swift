@@ -29,21 +29,13 @@ extension NavigationKit {
          启动默认的海拔计算数据管道，将 `CoreLocationKit` 的位置数据自动接入 `ElevationManager`。
          
          - Important: 此方法为**幂等**设计，多次调用仅第一次生效，后续调用将被忽略，不会重复建立订阅。
-         - Attention: 该默认管道基于 `CoreLocationKit.shared.locationPublisher` 提供的位置数据，
-           使用 `CLLocation.distance(from:)` 计算相邻两点间的水平距离，以用于坡度与累计爬升/下降的计算。
-         - Bug: 如果上层在未正确配置定位权限或未启用定位服务的情况下调用本方法，
-           可能导致 `locationPublisher` 长时间无数据推送，从而无法更新海拔相关统计。
-         - Warning: 本方法**不会**主动请求定位权限或启动硬件，仅建立对 `locationPublisher` 的订阅；
-           上层仍需确保 `CoreLocationKit` 已按需初始化并具有有效的定位权限。
-         - Requires: 需要在工程中集成 `CoreLocationKit` 与 `NavigationCoreKit`，并保证
-           `CoreLocationKit.shared.locationPublisher` 能够稳定推送 `CLLocation` 数据。
-         - Remark: 该方法适用于“快速接入”的场景，例如公路导航、骑行记录等，不需要自行管理
-           海拔处理管线的应用。
-         - Note: 若对水平距离计算有更高精度要求（如基于轨迹纠偏、地图匹配等），
-           建议**不要使用本默认管道**，而是在上层自行调用
-           `ElevationManager.processAltitudeSample(rawAltitude:horizontalDistance:)` 进行更精细控制。
-         - Precondition: `CoreLocationKit.shared` 已完成初始化，且应用的 Info.plist 中已配置
-           必要的定位权限字段（如 `NSLocationWhenInUseUsageDescription` 等）。
+         - Attention: 该默认管道基于 `CoreLocationKit.shared.locationPublisher` 提供的位置数据，使用 `CLLocation.distance(from:)` 计算相邻两点间的水平距离，以用于坡度与累计爬升/下降的计算。
+         - Bug: 如果上层在未正确配置定位权限或未启用定位服务的情况下调用本方法，可能导致 `locationPublisher` 长时间无数据推送，从而无法更新海拔相关统计。
+         - Warning: 本方法**不会**主动请求定位权限或启动硬件，仅建立对 `locationPublisher` 的订阅；上层仍需确保 `CoreLocationKit` 已按需初始化并具有有效的定位权限。
+         - Requires: 需要在工程中集成 `CoreLocationKit` 与 `NavigationCoreKit`，并保证`CoreLocationKit.shared.locationPublisher` 能够稳定推送 `CLLocation` 数据。
+         - Remark: 该方法适用于“快速接入”的场景，例如公路导航、骑行记录等，不需要自行管理海拔处理管线的应用。
+         - Note: 若对水平距离计算有更高精度要求（如基于轨迹纠偏、地图匹配等），建议**不要使用本默认管道**，而是在上层自行调用`ElevationManager.processAltitudeSample(rawAltitude:horizontalDistance:)` 进行更精细控制。
+         - Precondition: `CoreLocationKit.shared` 已完成初始化，且应用的 Info.plist 中已配置必要的定位权限字段（如 `NSLocationWhenInUseUsageDescription` 等）。
          - Postcondition: 成功调用后，`ElevationManager` 将随位置更新自动计算：
            - 平滑海拔（`smoothedAltitude`）
            - 累计爬升（`elevationGain`）
