@@ -634,8 +634,7 @@ private final class SingleLocationRequest: NSObject, CLLocationManagerDelegate {
  
     /// 本次请求独享的定位管理器，与主实例隔离
     private let manager = CLLocationManager()
-    // [LEAK-TEST] 临时验证实例释放，验证后删除
-    deinit { print("[LEAK-TEST] SingleLocationRequest 已释放") }
+    
     /// 结果回调：成功传出位置，失败传出错误。仅会被调用一次
     private let completion: (Result<CLLocation, Swift.Error>) -> Void
  
