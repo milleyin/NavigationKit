@@ -510,12 +510,28 @@ extension CoreLocationKit {
         }
         locationManager.stopUpdatingLocation()
         locationManager.startUpdatingLocation()
-
+        
         
         if CLLocationManager.headingAvailable() {
             locationManager.startUpdatingHeading()
         } else {
             print("⚠️ 设备不支持方向数据，跳过 `startUpdatingHeading()`")
+        }
+    }
+    
+    /**
+     在授权状态尚未决定（`notDetermined`）时发起一次定位授权请求。
+     
+     - Note: 判断依据取自 `currentAuthorizationStatus`（即 `authorizationStatusSubject` 当前值）
+     - Note: 可安全重复调用——系统对已决定授权的 App 会忽略重复的 `requestWhenInUseAuthorization()`（不弹框、无副作用）；仅在 `notDetermined` 时正常弹出授权框。
+     - Important: `requestWhenInUseAuthorization()` 要求在主线程调用，故派发至主队列。
+     */
+    private func requestAuthorizationIfNeeded() {
+        // 仅在「尚未决定」时请求；已授权 / 已拒绝状态下无需打扰
+        guard currentAuthorizationStatus == .notDetermined else { return }
+        // requestWhenInUseAuthorization 要求主线程调用
+        DispatchQueue.main.async {
+            self.locationManager.requestWhenInUseAuthorization()
         }
     }
 }
