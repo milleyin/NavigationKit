@@ -178,7 +178,8 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
         return CurrentValueSubject(CLLocationManager().authorizationStatus)
         #endif
     }()
-    
+    /// 内部长期订阅容器：持有「授权状态驱动持续更新启停」等跟随单例生命周期的订阅
+    private var subscriptions = Set<AnyCancellable>()
     /// 方向订阅对象
     private let headingSubject = CurrentValueSubject<CLHeading?, Never>(nil)
     /// 速度订阅对象（m/s）
