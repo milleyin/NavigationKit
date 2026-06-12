@@ -443,35 +443,39 @@ extension CoreLocationKit {
     static func validatePreconditions(servicesEnabled: Bool, status: CLAuthorizationStatus) -> LocationError? {
         guard servicesEnabled else { return .locationServicesDisabled }
         
-        // 授权白名单按平台区分：.authorizedWhenInUse 是 iOS 专属 case，macOS SDK 中不存在
+        // notDetermined（尚未决定）与 denied/restricted（已拒绝/受限）语义不同：前者应「请求授权/等待就绪」，
+        // 后者才是真正的权限受阻。二者分开映射，不再笼统当作 permissionDenied。
+        // .authorizedWhenInUse 是 iOS 专属 case，macOS SDK 中不存在，故用 #if 包裹。
+        switch status {
+        case .authorizedAlways:
+            return nil
 #if os(iOS)
-        let isAuthorized = (status == .authorizedWhenInUse || status == .authorizedAlways)
-#elseif os(macOS)
-        let isAuthorized = (status == .authorizedAlways)
+        case .authorizedWhenInUse:
+            return nil
 #endif
-        
-        guard isAuthorized else { return .permissionDenied }
-        return nil
+        case .notDetermined:
+            return .permissionNotDetermined
+        case .denied, .restricted:
+            return .permissionDenied
+        @unknown default:
+            // CLAuthorizationStatus 是 SDK 非冻结枚举，未来新增的未知状态保守视为受阻
+            return .permissionDenied
+        }
     }
     
     /**
-     查询当前是否满足发起定位请求的条件。
+     查询当前是否满足发起定位请求的条件（基于当前已知授权状态的同步快照判定）。
      
-     读取系统实时的服务开关与授权状态，内部复用纯函数 `validatePreconditions(servicesEnabled:status:)`。供应用层在发起定位前做预检——例如据返回的错误提示用户「去开启定位服务」或「去授权」。
+     服务开关瞬时可读；授权状态取自 `currentAuthorizationStatus`（subject 当前值，SDK 内授权状态的单一真相源），不再瞬时读 `locationManager.authorizationStatus`。内部复用纯函数 `validatePreconditions(servicesEnabled:status:)`。供应用层发起定位前做预检。
      
      - Returns: 满足条件返回 `nil`；否则返回阻碍发起的具体 `LocationError`。
-     - Note: 仅做「能否发起」的判定，不触发任何定位请求。
+     - Note: 仅做「能否发起」的快照判定，不触发定位、也不等待授权就绪。
+     - Important: 这是同步快照——启动空窗期内 subject 尚为 `notDetermined` 时会如实反映该状态、并非系统真值；需要可靠结果应走会「等就绪」的 `requestCurrentLocation(timeout:)`。
      */
     public func currentLocationReadiness() -> LocationError? {
-#if os(iOS)
-        let status = CLLocationManager.authorizationStatus()
-#elseif os(macOS)
-        let status = locationManager.authorizationStatus
-#endif
-        return Self.validatePreconditions(
-            servicesEnabled: CLLocationManager.locationServicesEnabled(),
-            status: status
-        )
+        // 授权状态统一取自 subject（单一真相源），不再瞬时读实例属性——后者在启动空窗期会得到假 notDetermined。
+        // subject 为 CLAuthorizationStatus（平台无关），故无需再按平台 #if 区分读取方式。
+        return Self.validatePreconditions(servicesEnabled: CLLocationManager.locationServicesEnabled(), status: currentAuthorizationStatus)
     }
 }
 
@@ -581,6 +585,8 @@ extension CoreLocationKit {
         case locationServicesDisabled
         //用户未授权定位
         case permissionDenied
+        /// 定位授权尚未决定（用户还未对授权请求做出选择）——区别于已拒绝的 permissionDenied
+        case permissionNotDetermined
         case geoEncodingFailed(originalError: Swift.Error)
         case noAddressFound
         /// 单次定位请求在指定时限内未取得位置
@@ -594,6 +600,8 @@ extension CoreLocationKit {
                 return "设备定位服务已关闭，请在系统设置中启用 GPS。"
             case .permissionDenied:
                 return "应用没有访问位置信息的权限，请在设置中允许定位。"
+            case .permissionNotDetermined:
+                return "尚未确定定位授权，用户还未做出选择。"
             case .geoEncodingFailed(let originalError):
                 return "反向地理编码失败: \(originalError.localizedDescription)"
             case .noAddressFound:
@@ -611,6 +619,8 @@ extension CoreLocationKit {
                 return "请打开系统的定位服务 (设置 -> 隐私 -> 定位服务)。"
             case .permissionDenied:
                 return "请在 (设置 -> 隐私 -> 定位服务 -> 你的 App) 里启用访问权限。"
+            case .permissionNotDetermined:
+                return "请在弹出的定位授权请求中选择「允许」；若未弹出可稍后重试。"
             case .geoEncodingFailed:
                 return "请检查网络连接，并尝试重新请求。"
             case .noAddressFound:
