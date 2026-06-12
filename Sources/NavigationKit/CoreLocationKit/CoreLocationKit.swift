@@ -51,36 +51,26 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
         locationManager.desiredAccuracy = accuracy
         locationManager.distanceFilter = distanceFilter
         
-        #if os(iOS)
-        // iOS: 继续使用静态方法
+        // 空窗期可能是 notDetermined，由 didChangeAuthorization 后续更新为真值。
+        // iOS 沿用静态方法、macOS 用实例属性，是两平台读取 API 的固有差异。
+#if os(iOS)
         authorizationStatusSubject.send(CLLocationManager.authorizationStatus())
-        
-        if CLLocationManager.authorizationStatus() == .notDetermined {
-            DispatchQueue.main.async {
-                self.locationManager.requestWhenInUseAuthorization()
-            }
-        }
-        
-        if CLLocationManager.authorizationStatus() == .authorizedWhenInUse || CLLocationManager.authorizationStatus() == .authorizedAlways {
-            locationManager.startUpdatingLocation()
-            locationManager.startUpdatingHeading()
-        }
-        
-        #elseif os(macOS)
-        // macOS: 必须用实例属性
+#elseif os(macOS)
         authorizationStatusSubject.send(locationManager.authorizationStatus)
+#endif
         
-        if locationManager.authorizationStatus == .notDetermined {
-            DispatchQueue.main.async {
-                self.locationManager.requestWhenInUseAuthorization()
+        // 尚未决定授权时发起请求（收敛入口，已决定则 no-op）
+        requestAuthorizationIfNeeded()
+        
+        // 响应式启停持续更新：订阅授权状态，就绪且在白名单时启动、否则停止。
+        // 单一启停入口——「初始已授权」由 CurrentValueSubject 重放当前值触发，「后续变化」由
+        // didChangeAuthorization 送值触发，二者都经此 sink，故 didChangeAuthorization 不再自行启停。
+        authorizationStatusPublisher
+            .removeDuplicates()
+            .sink { [weak self] status in
+                self?.updateContinuousUpdates(for: status)
             }
-        }
-        
-        if locationManager.authorizationStatus == .authorizedAlways {
-            locationManager.startUpdatingLocation()
-            locationManager.startUpdatingHeading()
-        }
-        #endif
+            .store(in: &subscriptions)
     }
     
     
@@ -243,24 +233,8 @@ extension CoreLocationKit {
     }
     
     public func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        // 仅把最新授权状态送入 subject；持续更新的启停由 init 中订阅 subject 的响应式管线统一处理（归一/去重）。
         authorizationStatusSubject.send(status)
-        
-        #if os(iOS)
-        if status == .authorizedWhenInUse || status == .authorizedAlways {
-            locationManager.startUpdatingLocation()
-            locationManager.startUpdatingHeading()
-        } else {
-            locationManager.stopUpdatingLocation()
-            locationManager.stopUpdatingHeading()
-        }
-        
-        #elseif os(macOS)
-        if status == .authorizedAlways {
-            locationManager.startUpdatingLocation()
-        } else {
-            locationManager.stopUpdatingLocation()
-        }
-        #endif
     }
     
     public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
