@@ -567,6 +567,35 @@ extension CoreLocationKit {
         }
         .eraseToAnyPublisher()
     }
+    
+    /**
+     根据授权状态启停持续定位 / 方向更新（持续更新的单一启停入口）。
+     
+     由 `init` 中对 `authorizationStatusPublisher` 的订阅驱动：授权就绪且在平台白名单内则启动，否则停止。`didChangeAuthorization` 仅把新状态送入 subject、不再自行启停，启停在此归一处理。
+     
+     - Parameter status: 当前授权状态。
+     - Note: 白名单按平台区分——iOS 含 `.authorizedWhenInUse`/`.authorizedAlways`，macOS 仅 `.authorizedAlways`，故 `#if os(...)` 在内部区分，不引用对方平台不存在的 case。
+     - Note: `startUpdatingLocation()`/`stopUpdatingLocation()` 幂等，重复调用无副作用；方向更新经 `headingAvailable()` 判定后启停。
+     */
+    private func updateContinuousUpdates(for status: CLAuthorizationStatus) {
+#if os(iOS)
+        let authorized = (status == .authorizedWhenInUse || status == .authorizedAlways)
+#elseif os(macOS)
+        let authorized = (status == .authorizedAlways)
+#endif
+        
+        if authorized {
+            locationManager.startUpdatingLocation()
+            #if os(iOS)
+            locationManager.startUpdatingHeading()
+            #endif
+        } else {
+            locationManager.stopUpdatingLocation()
+            #if os(iOS)
+            locationManager.stopUpdatingHeading()
+            #endif
+        }
+    }
 }
 
 //MARK: - 类型定义
