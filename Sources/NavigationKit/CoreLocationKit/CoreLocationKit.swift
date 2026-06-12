@@ -564,14 +564,19 @@ extension CoreLocationKit {
         
         if authorized {
             locationManager.startUpdatingLocation()
-            #if os(iOS)
-            locationManager.startUpdatingHeading()
-            #endif
+#if os(iOS)
+            // heading 仅 iOS 可用；iOS 内再以 headingAvailable() 判定设备磁力计能力，与 restartUpdatingLocation 一致
+            if CLLocationManager.headingAvailable() {
+                locationManager.startUpdatingHeading()
+            }
+#endif
         } else {
             locationManager.stopUpdatingLocation()
-            #if os(iOS)
-            locationManager.stopUpdatingHeading()
-            #endif
+#if os(iOS)
+            if CLLocationManager.headingAvailable() {
+                locationManager.stopUpdatingHeading()
+            }
+#endif
         }
     }
 }
