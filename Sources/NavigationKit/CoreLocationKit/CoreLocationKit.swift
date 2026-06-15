@@ -186,21 +186,15 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
      - parameter distance: 触发 `didUpdateLocations` 事件的最小移动距离（默认值 `35` 米）
      */
     public func setLocationAccuracy(_ accuracy: CLLocationAccuracy = kCLLocationAccuracyBest,
-                                     distanceFilter distance: CLLocationDistance = 35) {
+                                    distanceFilter distance: CLLocationDistance = 35) {
         locationManager.desiredAccuracy = accuracy
         locationManager.distanceFilter = distance
         
-        #if os(iOS)
-        let status = CLLocationManager.authorizationStatus()
-        if status == .authorizedWhenInUse || status == .authorizedAlways {
+        // 改完精度后，若当前已具备发起条件（服务开 + 已授权）则重启持续更新让新精度生效。
+        // 授权判断复用 currentLocationReadiness（读 subject、含平台白名单），不再瞬时读实例属性、不再各写一份白名单。
+        if currentLocationReadiness() == nil {
             restartUpdatingLocation()
         }
-        #elseif os(macOS)
-        let status = locationManager.authorizationStatus
-        if status == .authorizedAlways {
-            restartUpdatingLocation()
-        }
-        #endif
     }
     
     
@@ -402,28 +396,12 @@ extension CoreLocationKit {
      - parameter allowed: 是否允许后台定位，`true` 开启，`false` 关闭。
      */
     public func allowBackgroundLocationUpdates(_ allowed: Bool) {
-#if os(iOS)
-        guard CLLocationManager.authorizationStatus() == .authorizedAlways else {
+        
+        // 授权状态取自 subject（单一真相源），不再瞬时读实例属性（空窗期会得到假 notDetermined）
+        guard currentAuthorizationStatus == .authorizedAlways else {
             print("⚠️ 请启用 `Always` 授权，以允许后台更新位置")
             return
         }
-        
-        guard UIApplication.shared.backgroundRefreshStatus == .available else {
-            print("⚠️ 设备禁用了后台刷新，后台定位功能可能无法生效")
-            return
-        }
-        
-        locationManager.allowsBackgroundLocationUpdates = allowed
-        locationManager.pausesLocationUpdatesAutomatically = !allowed
-        
-        if allowed {
-            print("后台定位已启用")
-        } else {
-            print("后台定位已关闭")
-        }
-#else
-        print("⚠️ macOS 不支持后台定位更新功能")
-#endif
     }
 }
 
