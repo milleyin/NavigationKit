@@ -329,15 +329,15 @@ extension CoreLocationKit {
      - Note: 是否重试由调用方决定——可对返回值施加 `.retry(_:)`。SDK 不内置重试。
      - Note: 若只需「此刻的缓存位置、可能为 nil」，应改用 `currentLocation` 属性，零等待零耗电；若需持续跟踪，应订阅 `locationPublisher`。
      - Example:
-        ```swift
-            CoreLocationKit.shared.requestCurrentLocation()
-                .sink { completion in
-                    if case .failure(let error) = completion { print(error) }
-                } receiveValue: { location in
-                    print("取得位置: \(location)")
-                }
-                .store(in: &subscriptions)
-        ```
+     ```swift
+     CoreLocationKit.shared.requestCurrentLocation()
+     .sink { completion in
+     if case .failure(let error) = completion { print(error) }
+     } receiveValue: { location in
+     print("取得位置: \(location)")
+     }
+     .store(in: &subscriptions)
+     ```
      */
     public func requestCurrentLocation(timeout: TimeInterval = 10) -> AnyPublisher<CLLocation, Swift.Error> {
         // 步骤1：服务总开关无空窗期，可瞬时判断；关闭则直接失败，不必进入等待
@@ -378,12 +378,9 @@ extension CoreLocationKit {
     /**
      设置是否允许后台位置更新。
      
-     - Important: 仅当应用拥有 **`authorizedAlways`** 权限时才可启用后台定位。
-     若当前授权状态不是 `authorizedAlways`，则不会修改 `allowsBackgroundLocationUpdates`，
-     并会打印警告信息。
+     - Important: 仅当应用拥有 **`authorizedAlways`** 权限时才可启用后台定位。若当前授权状态不是 `authorizedAlways`，则不会修改 `allowsBackgroundLocationUpdates`，并会打印警告信息。
      - Attention: 启用后台定位可能会显著增加电量消耗，应仅在必要时使用。
-     - Warning: 若未在 `Info.plist` 添加 `UIBackgroundModes` -> `location`，
-     即使设置 `allowsBackgroundLocationUpdates = true`，后台定位仍不会生效。
+     - Warning: 若未在 `Info.plist` 添加 `UIBackgroundModes` -> `location`，即使设置 `allowsBackgroundLocationUpdates = true`，后台定位仍不会生效。
      - Note:
      - iOS 13+ 需要用户在系统设置中 **手动开启** `Always Allow`。
      - 后台定位适用于 **步行导航、车辆跟踪、健身应用** 等场景。
