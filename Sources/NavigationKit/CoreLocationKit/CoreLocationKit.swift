@@ -51,36 +51,26 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
         locationManager.desiredAccuracy = accuracy
         locationManager.distanceFilter = distanceFilter
         
-        #if os(iOS)
-        // iOS: 继续使用静态方法
+        // 空窗期可能是 notDetermined，由 didChangeAuthorization 后续更新为真值。
+        // iOS 沿用静态方法、macOS 用实例属性，是两平台读取 API 的固有差异。
+#if os(iOS)
         authorizationStatusSubject.send(CLLocationManager.authorizationStatus())
-        
-        if CLLocationManager.authorizationStatus() == .notDetermined {
-            DispatchQueue.main.async {
-                self.locationManager.requestWhenInUseAuthorization()
-            }
-        }
-        
-        if CLLocationManager.authorizationStatus() == .authorizedWhenInUse || CLLocationManager.authorizationStatus() == .authorizedAlways {
-            locationManager.startUpdatingLocation()
-            locationManager.startUpdatingHeading()
-        }
-        
-        #elseif os(macOS)
-        // macOS: 必须用实例属性
+#elseif os(macOS)
         authorizationStatusSubject.send(locationManager.authorizationStatus)
+#endif
         
-        if locationManager.authorizationStatus == .notDetermined {
-            DispatchQueue.main.async {
-                self.locationManager.requestWhenInUseAuthorization()
+        // 尚未决定授权时发起请求（收敛入口，已决定则 no-op）
+        requestAuthorizationIfNeeded()
+        
+        // 响应式启停持续更新：订阅授权状态，就绪且在白名单时启动、否则停止。
+        // 单一启停入口——「初始已授权」由 CurrentValueSubject 重放当前值触发，「后续变化」由
+        // didChangeAuthorization 送值触发，二者都经此 sink，故 didChangeAuthorization 不再自行启停。
+        authorizationStatusPublisher
+            .removeDuplicates()
+            .sink { [weak self] status in
+                self?.updateContinuousUpdates(for: status)
             }
-        }
-        
-        if locationManager.authorizationStatus == .authorizedAlways {
-            locationManager.startUpdatingLocation()
-            locationManager.startUpdatingHeading()
-        }
-        #endif
+            .store(in: &subscriptions)
     }
     
     
@@ -178,7 +168,8 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
         return CurrentValueSubject(CLLocationManager().authorizationStatus)
         #endif
     }()
-    
+    /// 内部长期订阅容器：持有「授权状态驱动持续更新启停」等跟随单例生命周期的订阅
+    private var subscriptions = Set<AnyCancellable>()
     /// 方向订阅对象
     private let headingSubject = CurrentValueSubject<CLHeading?, Never>(nil)
     /// 速度订阅对象（m/s）
@@ -195,21 +186,15 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
      - parameter distance: 触发 `didUpdateLocations` 事件的最小移动距离（默认值 `35` 米）
      */
     public func setLocationAccuracy(_ accuracy: CLLocationAccuracy = kCLLocationAccuracyBest,
-                                     distanceFilter distance: CLLocationDistance = 35) {
+                                    distanceFilter distance: CLLocationDistance = 35) {
         locationManager.desiredAccuracy = accuracy
         locationManager.distanceFilter = distance
         
-        #if os(iOS)
-        let status = CLLocationManager.authorizationStatus()
-        if status == .authorizedWhenInUse || status == .authorizedAlways {
+        // 改完精度后，若当前已具备发起条件（服务开 + 已授权）则重启持续更新让新精度生效。
+        // 授权判断复用 currentLocationReadiness（读 subject、含平台白名单），不再瞬时读实例属性、不再各写一份白名单。
+        if currentLocationReadiness() == nil {
             restartUpdatingLocation()
         }
-        #elseif os(macOS)
-        let status = locationManager.authorizationStatus
-        if status == .authorizedAlways {
-            restartUpdatingLocation()
-        }
-        #endif
     }
     
     
@@ -242,24 +227,8 @@ extension CoreLocationKit {
     }
     
     public func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        // 仅把最新授权状态送入 subject；持续更新的启停由 init 中订阅 subject 的响应式管线统一处理（归一/去重）。
         authorizationStatusSubject.send(status)
-        
-        #if os(iOS)
-        if status == .authorizedWhenInUse || status == .authorizedAlways {
-            locationManager.startUpdatingLocation()
-            locationManager.startUpdatingHeading()
-        } else {
-            locationManager.stopUpdatingLocation()
-            locationManager.stopUpdatingHeading()
-        }
-        
-        #elseif os(macOS)
-        if status == .authorizedAlways {
-            locationManager.startUpdatingLocation()
-        } else {
-            locationManager.stopUpdatingLocation()
-        }
-        #endif
     }
     
     public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -360,15 +329,15 @@ extension CoreLocationKit {
      - Note: 是否重试由调用方决定——可对返回值施加 `.retry(_:)`。SDK 不内置重试。
      - Note: 若只需「此刻的缓存位置、可能为 nil」，应改用 `currentLocation` 属性，零等待零耗电；若需持续跟踪，应订阅 `locationPublisher`。
      - Example:
-        ```swift
-            CoreLocationKit.shared.requestCurrentLocation()
-                .sink { completion in
-                    if case .failure(let error) = completion { print(error) }
-                } receiveValue: { location in
-                    print("取得位置: \(location)")
-                }
-                .store(in: &subscriptions)
-        ```
+     ```swift
+     CoreLocationKit.shared.requestCurrentLocation()
+     .sink { completion in
+     if case .failure(let error) = completion { print(error) }
+     } receiveValue: { location in
+     print("取得位置: \(location)")
+     }
+     .store(in: &subscriptions)
+     ```
      */
     public func requestCurrentLocation(timeout: TimeInterval = 10) -> AnyPublisher<CLLocation, Swift.Error> {
         // 步骤1：服务总开关无空窗期，可瞬时判断；关闭则直接失败，不必进入等待
@@ -409,12 +378,9 @@ extension CoreLocationKit {
     /**
      设置是否允许后台位置更新。
      
-     - Important: 仅当应用拥有 **`authorizedAlways`** 权限时才可启用后台定位。
-     若当前授权状态不是 `authorizedAlways`，则不会修改 `allowsBackgroundLocationUpdates`，
-     并会打印警告信息。
+     - Important: 仅当应用拥有 **`authorizedAlways`** 权限时才可启用后台定位。若当前授权状态不是 `authorizedAlways`，则不会修改 `allowsBackgroundLocationUpdates`，并会打印警告信息。
      - Attention: 启用后台定位可能会显著增加电量消耗，应仅在必要时使用。
-     - Warning: 若未在 `Info.plist` 添加 `UIBackgroundModes` -> `location`，
-     即使设置 `allowsBackgroundLocationUpdates = true`，后台定位仍不会生效。
+     - Warning: 若未在 `Info.plist` 添加 `UIBackgroundModes` -> `location`，即使设置 `allowsBackgroundLocationUpdates = true`，后台定位仍不会生效。
      - Note:
      - iOS 13+ 需要用户在系统设置中 **手动开启** `Always Allow`。
      - 后台定位适用于 **步行导航、车辆跟踪、健身应用** 等场景。
@@ -427,8 +393,10 @@ extension CoreLocationKit {
      - parameter allowed: 是否允许后台定位，`true` 开启，`false` 关闭。
      */
     public func allowBackgroundLocationUpdates(_ allowed: Bool) {
+        
 #if os(iOS)
-        guard CLLocationManager.authorizationStatus() == .authorizedAlways else {
+        // 授权状态取自 subject（单一真相源），不再瞬时读实例属性（空窗期会得到假 notDetermined）
+        guard currentAuthorizationStatus == .authorizedAlways else {
             print("⚠️ 请启用 `Always` 授权，以允许后台更新位置")
             return
         }
@@ -468,35 +436,39 @@ extension CoreLocationKit {
     static func validatePreconditions(servicesEnabled: Bool, status: CLAuthorizationStatus) -> LocationError? {
         guard servicesEnabled else { return .locationServicesDisabled }
         
-        // 授权白名单按平台区分：.authorizedWhenInUse 是 iOS 专属 case，macOS SDK 中不存在
+        // notDetermined（尚未决定）与 denied/restricted（已拒绝/受限）语义不同：前者应「请求授权/等待就绪」，
+        // 后者才是真正的权限受阻。二者分开映射，不再笼统当作 permissionDenied。
+        // .authorizedWhenInUse 是 iOS 专属 case，macOS SDK 中不存在，故用 #if 包裹。
+        switch status {
+        case .authorizedAlways:
+            return nil
 #if os(iOS)
-        let isAuthorized = (status == .authorizedWhenInUse || status == .authorizedAlways)
-#elseif os(macOS)
-        let isAuthorized = (status == .authorizedAlways)
+        case .authorizedWhenInUse:
+            return nil
 #endif
-        
-        guard isAuthorized else { return .permissionDenied }
-        return nil
+        case .notDetermined:
+            return .permissionNotDetermined
+        case .denied, .restricted:
+            return .permissionDenied
+        @unknown default:
+            // CLAuthorizationStatus 是 SDK 非冻结枚举，未来新增的未知状态保守视为受阻
+            return .permissionDenied
+        }
     }
     
     /**
-     查询当前是否满足发起定位请求的条件。
+     查询当前是否满足发起定位请求的条件（基于当前已知授权状态的同步快照判定）。
      
-     读取系统实时的服务开关与授权状态，内部复用纯函数 `validatePreconditions(servicesEnabled:status:)`。供应用层在发起定位前做预检——例如据返回的错误提示用户「去开启定位服务」或「去授权」。
+     服务开关瞬时可读；授权状态取自 `currentAuthorizationStatus`（subject 当前值，SDK 内授权状态的单一真相源），不再瞬时读 `locationManager.authorizationStatus`。内部复用纯函数 `validatePreconditions(servicesEnabled:status:)`。供应用层发起定位前做预检。
      
      - Returns: 满足条件返回 `nil`；否则返回阻碍发起的具体 `LocationError`。
-     - Note: 仅做「能否发起」的判定，不触发任何定位请求。
+     - Note: 仅做「能否发起」的快照判定，不触发定位、也不等待授权就绪。
+     - Important: 这是同步快照——启动空窗期内 subject 尚为 `notDetermined` 时会如实反映该状态、并非系统真值；需要可靠结果应走会「等就绪」的 `requestCurrentLocation(timeout:)`。
      */
     public func currentLocationReadiness() -> LocationError? {
-#if os(iOS)
-        let status = CLLocationManager.authorizationStatus()
-#elseif os(macOS)
-        let status = locationManager.authorizationStatus
-#endif
-        return Self.validatePreconditions(
-            servicesEnabled: CLLocationManager.locationServicesEnabled(),
-            status: status
-        )
+        // 授权状态统一取自 subject（单一真相源），不再瞬时读实例属性——后者在启动空窗期会得到假 notDetermined。
+        // subject 为 CLAuthorizationStatus（平台无关），故无需再按平台 #if 区分读取方式。
+        return Self.validatePreconditions(servicesEnabled: CLLocationManager.locationServicesEnabled(), status: currentAuthorizationStatus)
     }
 }
 
@@ -566,6 +538,40 @@ extension CoreLocationKit {
         }
         .eraseToAnyPublisher()
     }
+    
+    /**
+     根据授权状态启停持续定位 / 方向更新（持续更新的单一启停入口）。
+     
+     由 `init` 中对 `authorizationStatusPublisher` 的订阅驱动：授权就绪且在平台白名单内则启动，否则停止。`didChangeAuthorization` 仅把新状态送入 subject、不再自行启停，启停在此归一处理。
+     
+     - Parameter status: 当前授权状态。
+     - Note: 白名单按平台区分——iOS 含 `.authorizedWhenInUse`/`.authorizedAlways`，macOS 仅 `.authorizedAlways`，故 `#if os(...)` 在内部区分，不引用对方平台不存在的 case。
+     - Note: `startUpdatingLocation()`/`stopUpdatingLocation()` 幂等，重复调用无副作用；方向更新经 `headingAvailable()` 判定后启停。
+     */
+    private func updateContinuousUpdates(for status: CLAuthorizationStatus) {
+#if os(iOS)
+        let authorized = (status == .authorizedWhenInUse || status == .authorizedAlways)
+#elseif os(macOS)
+        let authorized = (status == .authorizedAlways)
+#endif
+        
+        if authorized {
+            locationManager.startUpdatingLocation()
+#if os(iOS)
+            // heading 仅 iOS 可用；iOS 内再以 headingAvailable() 判定设备磁力计能力，与 restartUpdatingLocation 一致
+            if CLLocationManager.headingAvailable() {
+                locationManager.startUpdatingHeading()
+            }
+#endif
+        } else {
+            locationManager.stopUpdatingLocation()
+#if os(iOS)
+            if CLLocationManager.headingAvailable() {
+                locationManager.stopUpdatingHeading()
+            }
+#endif
+        }
+    }
 }
 
 //MARK: - 类型定义
@@ -577,6 +583,8 @@ extension CoreLocationKit {
         case locationServicesDisabled
         //用户未授权定位
         case permissionDenied
+        /// 定位授权尚未决定（用户还未对授权请求做出选择）——区别于已拒绝的 permissionDenied
+        case permissionNotDetermined
         case geoEncodingFailed(originalError: Swift.Error)
         case noAddressFound
         /// 单次定位请求在指定时限内未取得位置
@@ -590,6 +598,8 @@ extension CoreLocationKit {
                 return "设备定位服务已关闭，请在系统设置中启用 GPS。"
             case .permissionDenied:
                 return "应用没有访问位置信息的权限，请在设置中允许定位。"
+            case .permissionNotDetermined:
+                return "尚未确定定位授权，用户还未做出选择。"
             case .geoEncodingFailed(let originalError):
                 return "反向地理编码失败: \(originalError.localizedDescription)"
             case .noAddressFound:
@@ -607,6 +617,8 @@ extension CoreLocationKit {
                 return "请打开系统的定位服务 (设置 -> 隐私 -> 定位服务)。"
             case .permissionDenied:
                 return "请在 (设置 -> 隐私 -> 定位服务 -> 你的 App) 里启用访问权限。"
+            case .permissionNotDetermined:
+                return "请在弹出的定位授权请求中选择「允许」；若未弹出可稍后重试。"
             case .geoEncodingFailed:
                 return "请检查网络连接，并尝试重新请求。"
             case .noAddressFound:
@@ -634,8 +646,7 @@ private final class SingleLocationRequest: NSObject, CLLocationManagerDelegate {
  
     /// 本次请求独享的定位管理器，与主实例隔离
     private let manager = CLLocationManager()
-    // [LEAK-TEST] 临时验证实例释放，验证后删除
-    deinit { print("[LEAK-TEST] SingleLocationRequest 已释放") }
+    
     /// 结果回调：成功传出位置，失败传出错误。仅会被调用一次
     private let completion: (Result<CLLocation, Swift.Error>) -> Void
  

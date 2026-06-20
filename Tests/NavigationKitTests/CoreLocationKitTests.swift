@@ -41,16 +41,28 @@ final class CoreLocationKitTests: XCTestCase {
     }
 
     /**
-     服务开启但未授权（notDetermined / denied / restricted）时，应判定为 permissionDenied。
-     */
-    func testValidatePreconditions_servicesEnabledButNotAuthorized_returnsPermissionDenied() {
-        let unauthorized: [CLAuthorizationStatus] = [.notDetermined, .denied, .restricted]
-        for status in unauthorized {
+         服务开启但已拒绝 / 受限（denied / restricted）时，应判定为 permissionDenied。
+         */
+    func testValidatePreconditions_servicesEnabledButDeniedOrRestricted_returnsPermissionDenied() {
+        let blocked: [CLAuthorizationStatus] = [.denied, .restricted]
+        for status in blocked {
             let result = CoreLocationKit.validatePreconditions(servicesEnabled: true, status: status)
             guard case .permissionDenied = result else {
                 XCTFail("服务开启 + 授权\(status.rawValue) 应返回 permissionDenied，实际为 \(String(describing: result))")
                 continue
             }
+        }
+    }
+
+        /**
+         服务开启但授权尚未决定（notDetermined）时，应判定为 permissionNotDetermined，
+         而非 permissionDenied——「尚未决定」与「已拒绝」语义不同（方案 1.5）。
+         */
+    func testValidatePreconditions_servicesEnabledButNotDetermined_returnsNotDetermined() {
+        let result = CoreLocationKit.validatePreconditions(servicesEnabled: true, status: .notDetermined)
+        guard case .permissionNotDetermined = result else {
+            XCTFail("服务开启 + notDetermined 应返回 permissionNotDetermined，实际为 \(String(describing: result))")
+            return
         }
     }
 
@@ -60,11 +72,11 @@ final class CoreLocationKitTests: XCTestCase {
      白名单平台相关：iOS 含 whenInUse / always，macOS 仅 always。
      */
     func testValidatePreconditions_servicesEnabledAndAuthorized_returnsNil() {
-        #if os(iOS)
+#if os(iOS)
         let authorized: [CLAuthorizationStatus] = [.authorizedWhenInUse, .authorizedAlways]
-        #elseif os(macOS)
+#elseif os(macOS)
         let authorized: [CLAuthorizationStatus] = [.authorizedAlways]
-        #endif
+#endif
         for status in authorized {
             let result = CoreLocationKit.validatePreconditions(servicesEnabled: true, status: status)
             XCTAssertNil(result,
@@ -84,6 +96,7 @@ final class CoreLocationKitTests: XCTestCase {
             .locationUnavailable,
             .locationServicesDisabled,
             .permissionDenied,
+            .permissionNotDetermined,
             .geoEncodingFailed(originalError: dummy),
             .noAddressFound,
             .timeout
