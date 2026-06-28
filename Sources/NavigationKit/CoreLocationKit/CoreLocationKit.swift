@@ -85,21 +85,31 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
     public let locationManager: CLLocationManager
     
     /**
-     发布设备当前位置的 `Combine` 订阅者。
-     
-     - Important: 该 `Publisher` 会持续推送最新的位置信息。
-     - Returns: `CLLocation?`，如果设备尚未提供位置信息，则返回 `nil`。
-     - Note: 订阅该 `Publisher` 后，将接收 `CLLocationManager` 解析出的最新位置信息。
+     发布设备当前位置的 `Combine` 流。
+
+     - Important: **订阅此 publisher 即驱动持续定位**——已授权前提下，有订阅者时启动 `startUpdatingLocation` 持续推送，取消订阅（或无任何订阅者）则停止；无人订阅时 SDK 不进行持续定位（要不要持续由调用方订阅与否决定，机制/策略分离）。
+     - Attention: 持续定位增加电量消耗。只需「当前位置一次」用 `requestCurrentLocation(timeout:)`；只需「读最近缓存」用 `currentLocation`。
+     - Returns: `CLLocation?`，尚无位置信息时为 `nil`。
      - Example:
-     ```swift
+```swift
      locationKit.locationPublisher
      .sink { location in
      print("当前位置: \(String(describing: location))")
      }
-     ```
+```
      */
     public var locationPublisher: AnyPublisher<CLLocation?, Never> {
-        locationSubject.eraseToAnyPublisher()
+        locationSubject
+            .handleEvents(
+                receiveSubscription: { [weak self] _ in
+                    // handleEvents 钩子可能在任意线程触发，收口主线程保证计数只在 main 读写
+                    DispatchQueue.main.async { self?.locationSubscriberCountChanged(by: 1) }
+                },
+                receiveCancel: { [weak self] in
+                    DispatchQueue.main.async { self?.locationSubscriberCountChanged(by: -1) }
+                }
+            )
+            .eraseToAnyPublisher()
     }
     
     /**
