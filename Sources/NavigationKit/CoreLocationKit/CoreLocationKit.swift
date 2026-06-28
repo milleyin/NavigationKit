@@ -59,16 +59,16 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
         authorizationStatusSubject.send(locationManager.authorizationStatus)
 #endif
         
-        // 尚未决定授权时发起请求（收敛入口，已决定则 no-op）
-        requestAuthorizationIfNeeded()
-        
-        // 响应式启停持续更新：订阅授权状态，就绪且在白名单时启动、否则停止。
-        // 单一启停入口——「初始已授权」由 CurrentValueSubject 重放当前值触发，「后续变化」由
-        // didChangeAuthorization 送值触发，二者都经此 sink，故 didChangeAuthorization 不再自行启停。
+        // 授权变化触发持续定位启停的重新评估（完整启停条件含「有订阅者」，见 updateContinuousUpdates）。
+        // 「初始已授权」由 CurrentValueSubject 重放当前值触发，「后续变化」由 didChangeAuthorization 送值触发；
+        // 授权只是其中一个事件源，locationPublisher 订阅数跨 0 是另一个。
         authorizationStatusPublisher
             .removeDuplicates()
-            .sink { [weak self] status in
-                self?.updateContinuousUpdates(for: status)
+            // 收口主线程，与订阅计数源统一，updateContinuousUpdates 恒在 main
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                // 状态由方法内部读 currentAuthorizationStatus，不再传参
+                self?.updateContinuousUpdates()
             }
             .store(in: &subscriptions)
     }
