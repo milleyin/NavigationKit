@@ -154,6 +154,10 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
     
     /// 位置订阅对象
     private let locationSubject = CurrentValueSubject<CLLocation?, Never>(nil)
+    
+    /// `locationPublisher` 当前活跃订阅者数（仅在主线程读写）。
+    /// 持续定位启停取决于「授权就绪 AND 此值 > 0」——无人订阅则不空转持续定位。
+    private var locationSubscriberCount = 0
     /**
     进行中的单次定位请求。
        requestCurrentLocation(timeout:)` 每次创建一个 `SingleLocationRequest` 并暂存于此，以在请求存续期间维持强引用（否则 delegate 回调不触发）；请求终结后自动移除。
@@ -540,22 +544,38 @@ extension CoreLocationKit {
     }
     
     /**
-     根据授权状态启停持续定位 / 方向更新（持续更新的单一启停入口）。
+     调整 `locationPublisher` 订阅者计数，并在「有无订阅者」跨 0 变化时重新评估持续定位启停。
      
-     由 `init` 中对 `authorizationStatusPublisher` 的订阅驱动：授权就绪且在平台白名单内则启动，否则停止。`didChangeAuthorization` 仅把新状态送入 subject、不再自行启停，启停在此归一处理。
-     
-     - Parameter status: 当前授权状态。
-     - Note: 白名单按平台区分——iOS 含 `.authorizedWhenInUse`/`.authorizedAlways`，macOS 仅 `.authorizedAlways`，故 `#if os(...)` 在内部区分，不引用对方平台不存在的 case。
-     - Note: `startUpdatingLocation()`/`stopUpdatingLocation()` 幂等，重复调用无副作用；方向更新经 `headingAvailable()` 判定后启停。
+     - Parameter delta: 增量（订阅 +1 / 取消 -1）。
+     - Important: 必须在主线程调用（由 `locationPublisher` 的 `handleEvents` 钩子派发主队列保证）。
+     - Note: 仅 0↔1 跨越时才触发 `updateContinuousUpdates()`——同向增减（如 1→2）不改变「是否该持续定位」，无需重复启停。
      */
-    private func updateContinuousUpdates(for status: CLAuthorizationStatus) {
+    private func locationSubscriberCountChanged(by delta: Int) {
+        let hadSubscribers = locationSubscriberCount > 0
+        locationSubscriberCount += delta
+        let hasSubscribers = locationSubscriberCount > 0
+        if hadSubscribers != hasSubscribers {
+            updateContinuousUpdates()
+        }
+    }
+    
+    /**
+     持续定位 / 方向更新的单一启停入口，由两个事件源驱动重新评估：授权状态变化（`init` 的授权 sink）、`locationPublisher` 订阅数跨 0 变化（`locationSubscriberCountChanged`）。两源都收口主线程，故本方法恒在 main 执行。
+     
+     - Note: 启停需同时满足「授权就绪且在白名单」与「`locationPublisher` 有订阅者」——后者是本次修复核心：无人订阅则不空转持续定位（机制/策略分离）。
+     - Note: 白名单按平台区分（iOS `whenInUse`/`always`、macOS `always`），`#if os(...)` 区分、不引用对方平台 case；`startUpdatingLocation()`/`stopUpdatingLocation()` 幂等；方向更新经 `headingAvailable()` 判定。
+     */
+    private func updateContinuousUpdates() {
+        let status = currentAuthorizationStatus
 #if os(iOS)
         let authorized = (status == .authorizedWhenInUse || status == .authorizedAlways)
 #elseif os(macOS)
         let authorized = (status == .authorizedAlways)
 #endif
+        // 授权就绪 + 确有调用方订阅 locationPublisher，二者缺一不持续定位
+        let shouldRun = authorized && locationSubscriberCount > 0
         
-        if authorized {
+        if shouldRun {
             locationManager.startUpdatingLocation()
 #if os(iOS)
             // heading 仅 iOS 可用；iOS 内再以 headingAvailable() 判定设备磁力计能力，与 restartUpdatingLocation 一致
