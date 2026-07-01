@@ -388,10 +388,10 @@ extension CoreLocationKit {
                 return self.makeSingleLocationRequest(timeout: timeout)
             }
             .handleEvents(receiveOutput: { [weak self] location in
-                /** 单次成功也回写快照，使 currentLocation 独立于持续定位订阅——A1 后无人订阅时持续更新不跑，靠此保鲜。
-                此闭包恒在主线程（上游 timeout 的 scheduler 为 main，且 SingleLocationRequest 的 manager 在主线程创建、回调在主线程），
-                与持续更新里 locationSubject.send 同线程，故直接 send、无需跨线程收口。
-                receiveOutput 仅成功时触发，失败/超时不入此闭包，不以失败污染快照。*/
+                //单次成功也回写快照，使 currentLocation 独立于持续定位订阅——A1 后无人订阅时持续更新不跑，靠此保鲜。
+                //此闭包恒在主线程（上游 timeout 的 scheduler 为 main，且 SingleLocationRequest 的 manager 在主线程创建、回调在主线程），
+                //与持续更新里 locationSubject.send 同线程，故直接 send、无需跨线程收口。
+                //receiveOutput 仅成功时触发，失败/超时不入此闭包，不以失败污染快照。
                 self?.locationSubject.send(location)
             })
             .eraseToAnyPublisher()
