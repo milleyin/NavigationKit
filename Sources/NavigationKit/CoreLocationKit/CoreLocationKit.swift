@@ -116,9 +116,10 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
      获取当前设备的最新位置信息。
      
      - Important: 该属性 **仅返回最新缓存的位置数据**，不会主动触发新的定位请求。
-     - Returns: `CLLocation?`，如果设备尚未提供位置信息，则返回 `nil`。
-     - Note: 若希望主动请求最新位置，请使用 `requestCurrentLocation()` 方法。
-     */
+      - Returns: `CLLocation?`，如果设备尚未提供位置信息，则返回 `nil`。
+      - Note: 缓存由两条路径共同保鲜——「订阅 `locationPublisher` 期间的持续更新」与「`requestCurrentLocation` 单次请求成功」，故其新鲜度不依赖是否开着持续定位；即便无人订阅，只要单次请求成功过，此处即有值。
+      - Note: 若希望主动请求最新位置，请使用 `requestCurrentLocation(timeout:)` 方法。
+      */
     public var currentLocation: CLLocation? {
         locationSubject.value
     }
@@ -386,6 +387,13 @@ extension CoreLocationKit {
                 // 就绪且在白名单 → 发起单次定位；测量阶段超时由 SingleLocationRequest 内部计时负责
                 return self.makeSingleLocationRequest(timeout: timeout)
             }
+            .handleEvents(receiveOutput: { [weak self] location in
+                /** 单次成功也回写快照，使 currentLocation 独立于持续定位订阅——A1 后无人订阅时持续更新不跑，靠此保鲜。
+                此闭包恒在主线程（上游 timeout 的 scheduler 为 main，且 SingleLocationRequest 的 manager 在主线程创建、回调在主线程），
+                与持续更新里 locationSubject.send 同线程，故直接 send、无需跨线程收口。
+                receiveOutput 仅成功时触发，失败/超时不入此闭包，不以失败污染快照。*/
+                self?.locationSubject.send(location)
+            })
             .eraseToAnyPublisher()
     }
     
