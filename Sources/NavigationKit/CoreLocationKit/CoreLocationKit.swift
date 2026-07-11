@@ -334,7 +334,7 @@ extension CoreLocationKit {
      主动触发定位硬件获取**一个新的**位置，与「读取缓存快照」（`currentLocation`）和「持续订阅」（`locationPublisher`）是三种不同语义，互不替代。
      
      实现要点：
-     - **授权状态异步**：不在调用瞬间硬读授权状态（进程启动有「空窗期」，瞬时读会得到假 `notDetermined`），而是订阅授权状态、等其「就绪」（非 `notDetermined`）后再决策；尚未决定时先经收敛入口触发授权请求。已授权时因 `CurrentValueSubject` 重放当前值而零额外等待。
+     - **授权状态异步**：不在调用瞬间硬读授权状态（进程启动有「空窗期」，瞬时读会得到假`notDetermined`），而是订阅授权状态、等其「就绪」（非 `notDetermined`）后再决策；尚未决定时先经收敛入口触发授权请求。已授权时因 `CurrentValueSubject` 重放当前值而零额外等待。
      - 使用一个**独立的** `CLLocationManager`（封装在 `SingleLocationRequest` 内）执行本次请求，与主实例的持续定位完全隔离，不会干扰正在订阅 `locationPublisher` 的使用者。
      - 取得首个有效位置后立即停止该独立 manager，信守「取一次、省电」的语义。
      - 不自动重试。
