@@ -516,8 +516,9 @@ extension CoreLocationKit {
      - Note: 判断依据取自 `currentAuthorizationStatus`（即 `authorizationStatusSubject` 当前值）
      - Note: 可安全重复调用——系统对已决定授权的 App 会忽略重复的 `requestWhenInUseAuthorization()`（不弹框、无副作用）；仅在 `notDetermined` 时正常弹出授权框。
      - Important: `requestWhenInUseAuthorization()` 要求在主线程调用，故派发至主队列。
+     - Note: 触发时机由调用方决定（机制/策略分离）——`requestCurrentLocation` 不再内部自动调用，何时请求授权、要不要请求，交由调用方编排。
      */
-    private func requestAuthorizationIfNeeded() {
+    public func requestAuthorizationIfNeeded() {
         // 仅在「尚未决定」时请求；已授权 / 已拒绝状态下无需打扰
         guard currentAuthorizationStatus == .notDetermined else { return }
         // requestWhenInUseAuthorization 要求主线程调用
