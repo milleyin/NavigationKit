@@ -331,12 +331,13 @@ extension CoreLocationKit {
      主动触发定位硬件获取**一个新的**位置，与「读取缓存快照」（`currentLocation`）和「持续订阅」（`locationPublisher`）是三种不同语义，互不替代。
      
      实现要点：
-     - **授权状态异步**：不在调用瞬间硬读授权状态（进程启动有「空窗期」，瞬时读会得到假`notDetermined`），而是订阅授权状态、等其「就绪」（非 `notDetermined`）后再决策；尚未决定时先经收敛入口触发授权请求。已授权时因 `CurrentValueSubject` 重放当前值而零额外等待。
-     - 使用一个**独立的** `CLLocationManager`（封装在 `SingleLocationRequest` 内）执行本次请求，与主实例的持续定位完全隔离，不会干扰正在订阅 `locationPublisher` 的使用者。
+     - **授权状态异步**：不在调用瞬间硬读授权状态（进程启动有「空窗期」，瞬时读会得到假 `notDetermined`），而是订阅授权状态、等其「就绪」（非 `notDetermined`）后再决策。是否请求授权由调用方决定（见 `requestAuthorizationIfNeeded`）——未主动请求过时，状态停在 `notDetermined`，下方等待链会在 timeout 后正常失败，与「已拒绝」殊途同归。已授权时因 `CurrentValueSubject` 重放当前值而零额外等待。
+     - 使用一个**独立的** `CLLocationManager`（封装在 `SingleLocationRequest` 内）执行本次请求，与主实例的持续定位完全隔离，不会干扰正在订阅 `locationPublisher` 的使用者；精度也随参数显式传入、不借用主实例状态，隔离彻底。
      - 取得首个有效位置后立即停止该独立 manager，信守「取一次、省电」的语义。
      - 不自动重试。
      
      - Parameter timeout: 超时时限（秒），默认 10。涵盖「等待授权就绪」与「单次定位测量」——任一阶段超时均以 `LocationError.timeout` 失败。常态（已授权）下等待就绪近乎瞬时，timeout 实际作用于测量阶段。
+     - Parameter accuracy: 本次请求的定位精度，默认 `kCLLocationAccuracyBest`。仅作用于本次独立请求，不影响 `locationPublisher` 或其它并发的单次请求。
      - Returns: 发出**单个** `CLLocation` 后立即完成的 publisher；失败时发出错误。
      - Note: 是否重试由调用方决定——可对返回值施加 `.retry(_:)`。SDK 不内置重试。
      - Note: 若只需「此刻的缓存位置、可能为 nil」，应改用 `currentLocation` 属性，零等待零耗电；若需持续跟踪，应订阅 `locationPublisher`。
@@ -351,27 +352,24 @@ extension CoreLocationKit {
      .store(in: &subscriptions)
      ```
      */
-    public func requestCurrentLocation(timeout: TimeInterval = 10) -> AnyPublisher<CLLocation, Swift.Error> {
+    public func requestCurrentLocation(timeout: TimeInterval = 10,
+                                       accuracy: CLLocationAccuracy = kCLLocationAccuracyBest) -> AnyPublisher<CLLocation, Swift.Error> {
         // 步骤1：服务总开关无空窗期，可瞬时判断；关闭则直接失败，不必进入等待
         guard CLLocationManager.locationServicesEnabled() else {
             return Fail(error: LocationError.locationServicesDisabled).eraseToAnyPublisher()
         }
         
-        // 步骤2：尚未决定授权时经收敛入口发起授权请求；已决定则为 no-op
-        requestAuthorizationIfNeeded()
-        
-        // 步骤3~5：订阅授权状态，等其「就绪」（非 notDetermined）后再决策。
-        // 不再瞬时读 status —— 授权状态是异步的，启动空窗期内瞬时读会得到假 notDetermined。
-        // authorizationStatusSubject 是 CurrentValueSubject，订阅即重放当前值：已授权时当前值即真值，
-        // filter 立即放行、零额外等待；空窗期当前值为 notDetermined，被滤掉，待 didChangeAuthorization 送真值后再放行。
+        // 步骤2：订阅授权状态，等其「就绪」（非 notDetermined）后再决策。
+        // 是否请求授权由调用方决定（见 requestAuthorizationIfNeeded）——未主动请求过时，状态停在
+        // notDetermined，下方等待链会在 timeout 后正常失败，与「已拒绝」殊途同归。
         return authorizationStatusPublisher
             .filter { $0 != .notDetermined }
             .first()
-            .setFailureType(to: Swift.Error.self)            // Never → Error，以承接下方 timeout 与 flatMap 的错误流
+            .setFailureType(to: Swift.Error.self)
             .timeout(
                 .seconds(timeout),
                 scheduler: DispatchQueue.main,
-                customError: { LocationError.timeout }        // 等就绪超时：回调迟迟不到则失败，不无限挂起
+                customError: { LocationError.timeout }
             )
             .flatMap { [weak self] status -> AnyPublisher<CLLocation, Swift.Error> in
                 guard let self = self else {
