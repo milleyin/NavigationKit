@@ -382,7 +382,7 @@ extension CoreLocationKit {
                     return Fail(error: blocker).eraseToAnyPublisher()
                 }
                 // 就绪且在白名单 → 发起单次定位；测量阶段超时由 SingleLocationRequest 内部计时负责
-                return self.makeSingleLocationRequest(timeout: timeout)
+                return self.makeSingleLocationRequest(timeout: timeout, accuracy: accuracy)
             }
             .handleEvents(receiveOutput: { [weak self] location in
                 //单次成功也回写快照，使 currentLocation 独立于持续定位订阅——A1 后无人订阅时持续更新不跑，靠此保鲜。
@@ -527,28 +527,26 @@ extension CoreLocationKit {
     }
     
     /**
-     创建并发起一次独立的单次定位请求，桥接为 Combine publisher。
-     
-     封装 `SingleLocationRequest` 的生命周期：请求存续期间由 `pendingSingleRequests` 维持强引用，终结后自动解除。仅由 `requestCurrentLocation(timeout:)` 在授权就绪后调用。
+     封装 `SingleLocationRequest` 的生命周期：请求存续期间由 `pendingSingleRequests` 维持强引用，终结后自动解除。仅由 `requestCurrentLocation(timeout:accuracy:)` 在授权就绪后调用。
      
      - Parameter timeout: 单次测量的超时时限（秒），透传给 `SingleLocationRequest` 内部计时。
+     - Parameter accuracy: 本次单次测量使用的定位精度，由调用方（`requestCurrentLocation`）显式传入，不借用主实例的 `locationManager.desiredAccuracy`。
      - Returns: 发出单个 `CLLocation` 后完成的 publisher；失败时发出错误。
      */
-    private func makeSingleLocationRequest(timeout: TimeInterval) -> AnyPublisher<CLLocation, Swift.Error> {
+    private func makeSingleLocationRequest(timeout: TimeInterval, accuracy: CLLocationAccuracy) -> AnyPublisher<CLLocation, Swift.Error> {
         Future<CLLocation, Swift.Error> { [weak self] promise in
             guard let self = self else {
                 promise(.failure(LocationError.locationUnavailable))
                 return
             }
             let request = SingleLocationRequest(
-                desiredAccuracy: self.locationManager.desiredAccuracy,
+                desiredAccuracy: accuracy,
                 timeout: timeout,
                 completion: { result in
                     promise(result)
                 },
                 onFinish: { [weak self] finished in
-                    // 终结时由 SingleLocationRequest 回传自身，据此解除持有——
-                    // 不再用外部 var 捕获，从根上消除「实例 → onFinish → 捕获变量 → 实例」的自持有环
+                    // 终结时由 SingleLocationRequest 回传自身，据此解除持有
                     self?.pendingSingleRequests.remove(finished)
                 }
             )
