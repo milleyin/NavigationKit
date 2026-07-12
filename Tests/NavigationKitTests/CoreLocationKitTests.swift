@@ -142,8 +142,8 @@ final class CoreLocationKitTests: XCTestCase {
         let kit = CoreLocationKit.shared
         let expectation = expectation(description: "locationPublisher 推送注入的位置")
         let mock = CLLocation(latitude: 31.23, longitude: 121.47)
-
-        kit.locationPublisher
+        
+        kit.locationPublisher()
             .compactMap { $0 }
             .dropFirst(0)
             .sink { location in
@@ -152,7 +152,7 @@ final class CoreLocationKitTests: XCTestCase {
                 }
             }
             .store(in: &subscriptions)
-
+        
         kit.locationManager(kit.locationManager, didUpdateLocations: [mock])
         wait(for: [expectation], timeout: 1)
     }
