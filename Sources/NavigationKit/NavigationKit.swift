@@ -86,47 +86,47 @@ extension NavigationKit {
     }
     
     /**
-         停止默认的海拔计算数据管道，并重置相关内部状态。
-         
-         - Important: 调用本方法后，`NavigationKit` 将不再从 `CoreLocationKit` 接收位置更新，
-           默认海拔管道被完全关闭，直到再次调用 `startDefaultElevationPipeline()`。
-         - Attention: 本方法会调用 `ElevationManager.reset()`（需要在 `ElevationManager` 中提供实现），
-           用于清空平滑海拔、累计爬升/下降、坡度等内部统计，适合在“结束一次记录”或“重置状态”
-           的场景中使用。
-         - Bug: 若上层在仍需使用默认海拔管道时误调用本方法，将导致后续不再更新海拔与坡度数据，
-           需要重新调用 `startDefaultElevationPipeline()` 以恢复。
-         - Warning: 本方法会将 `subscriptions` 清空，意味着所有通过
-           `startDefaultElevationPipeline()` 建立的内部订阅都会被释放，无法恢复先前的状态。
-         - Requires: 应在确定当前不再需要默认海拔管道（例如停止轨迹记录、退出导航模式）时调用。
-         - Remark: 该方法不会影响上层自行构建的其它订阅逻辑，仅作用于
-           `NavigationKit` 内部维护的默认 Elevation 管道。
-         - Note:
-           - 如果你希望在不同“记录 Session”之间重用同一个 `ElevationManager` 实例，
-             推荐在每次开始新 Session 前调用一次 `stopElevationPipeline()`，
-             然后再调用 `startDefaultElevationPipeline()`，以保证统计数据干净。
-           - 如果你不希望在停止时清空历史统计，可在自定义版本中移除对 `reset()` 的调用。
-         - Precondition: `startDefaultElevationPipeline()` 曾被调用且当前处于已启动状态；
-           否则本方法将安静返回，不做任何操作。
-         - Postcondition:
-           - 默认海拔数据管道被完全停止；
-           - 内部订阅集合 `subscriptions` 被清空；
-           - `lastLocation` 被重置为 `nil`；
-           - `isElevationPipelineStarted` 被重置为 `false`；
-           - `elevationManager` 的内部统计算法状态被 `reset()` 清空（取决于你的实现）。
-         
-         # 使用示例
-         ```swift
-         // 结束一次骑行 / 导航记录时：
-         NavigationKit.stopElevationPipeline()
-         
-         // 再次开始新一段记录：
-         NavigationKit.startDefaultElevationPipeline()
-         ```
-         
-         - parameter 无: 本方法不接受任何参数。
-         - Returns: 无返回值。
-         - Throws: 不抛出错误。
-         */
+     停止默认的海拔计算数据管道，并重置相关内部状态。
+     
+     - Important: 调用本方法后，`NavigationKit` 将不再从 `CoreLocationKit` 接收位置更新，
+     默认海拔管道被完全关闭，直到再次调用 `startDefaultElevationPipeline()`。
+     - Attention: 本方法会调用 `ElevationManager.reset()`（需要在 `ElevationManager` 中提供实现），
+     用于清空平滑海拔、累计爬升/下降、坡度等内部统计，适合在“结束一次记录”或“重置状态”
+     的场景中使用。
+     - Bug: 若上层在仍需使用默认海拔管道时误调用本方法，将导致后续不再更新海拔与坡度数据，
+     需要重新调用 `startDefaultElevationPipeline()` 以恢复。
+     - Warning: 本方法会将 `subscriptions` 清空，意味着所有通过
+     `startDefaultElevationPipeline()` 建立的内部订阅都会被释放，无法恢复先前的状态。
+     - Requires: 应在确定当前不再需要默认海拔管道（例如停止轨迹记录、退出导航模式）时调用。
+     - Remark: 该方法不会影响上层自行构建的其它订阅逻辑，仅作用于
+     `NavigationKit` 内部维护的默认 Elevation 管道。
+     - Note:
+     - 如果你希望在不同“记录 Session”之间重用同一个 `ElevationManager` 实例，
+     推荐在每次开始新 Session 前调用一次 `stopElevationPipeline()`，
+     然后再调用 `startDefaultElevationPipeline()`，以保证统计数据干净。
+     - 如果你不希望在停止时清空历史统计，可在自定义版本中移除对 `reset()` 的调用。
+     - Precondition: `startDefaultElevationPipeline()` 曾被调用且当前处于已启动状态；
+     否则本方法将安静返回，不做任何操作。
+     - Postcondition:
+     - 默认海拔数据管道被完全停止；
+     - 内部订阅集合 `subscriptions` 被清空；
+     - `lastLocation` 被重置为 `nil`；
+     - `isElevationPipelineStarted` 被重置为 `false`；
+     - `elevationManager` 的内部统计算法状态被 `reset()` 清空（取决于你的实现）。
+     
+     # 使用示例
+     ```swift
+     // 结束一次骑行 / 导航记录时：
+     NavigationKit.stopElevationPipeline()
+     
+     // 再次开始新一段记录：
+     NavigationKit.startDefaultElevationPipeline()
+     ```
+     
+     - parameter 无: 本方法不接受任何参数。
+     - Returns: 无返回值。
+     - Throws: 不抛出错误。
+     */
     public static func stopElevationPipeline() {
         guard isElevationPipelineStarted else { return }
         
