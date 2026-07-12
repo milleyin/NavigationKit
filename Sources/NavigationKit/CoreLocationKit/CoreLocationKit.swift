@@ -24,32 +24,30 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
      初始化 `CoreLocationKit` 单例，统一管理 `CoreLocation` 相关的定位服务。
      
      - Important: 该类为单例模式，不能手动初始化，必须通过 `CoreLocationKit.shared` 访问。
-     - Attention: 仅在 `shared` 访问时初始化，所有定位服务在 `init` 时即开启。
+     - Attention: 仅在 `shared` 访问时初始化。`init` 本身不触发授权请求、不开始任何定位——是否请求授权、是否持续定位，均由调用方通过 `requestAuthorizationIfNeeded()` / 订阅 `locationPublisher(...)` 显式决定（机制/策略分离）。
      - Bug: 在 iOS 14 及以上，`requestWhenInUseAuthorization()` 可能需要在主线程调用，否则可能无效。
      - Warning: 请确保在 `Info.plist` 文件中添加 `NSLocationWhenInUseUsageDescription` 或 `NSLocationAlwaysUsageDescription`，否则 `requestWhenInUseAuthorization()` 将导致崩溃。
      - Requires: 适用于 `iOS 13.0+`，需要 `CoreLocation` 框架支持。
-     - Remark: `desiredAccuracy` 影响耗电量，`distanceFilter` 影响更新频率，合理设置可优化性能。
+     - Remark: `desiredAccuracy` 影响耗电量，`distanceFilter` 影响更新频率；两者不再通过 `init` 定制，改为在 `locationPublisher(accuracy:distanceFilter:)` / `requestCurrentLocation(accuracy:)` 每次发起定位时显式声明。
      - Note: `distanceFilter = kCLDistanceFilterNone` 表示始终触发 `didUpdateLocations`，不建议长期使用。
-     - Precondition: 必须确保 `locationServicesEnabled()` 返回 `true`，否则 `requestLocation()` 无效。
-     - Postcondition: 在初始化完成后，将立即请求授权并开始定位。
+     - Precondition: 必须确保 `CLLocationManager.locationServicesEnabled()` 返回 `true`，否则任何定位请求均无效。
+     - Postcondition: 初始化完成后不会自动请求授权或开始定位，处于完全被动状态，等待调用方显式触发。
      
      # 使用示例
      ```swift
      let locationKit = CoreLocationKit.shared
-     locationKit.setLocationAccuracy(.nearestTenMeters, distanceFilter: 10)
+     locationKit.requestAuthorizationIfNeeded()
+     locationKit.locationPublisher(accuracy: kCLLocationAccuracyNearestTenMeters, distanceFilter: 10)
+     .sink { location in print(location ?? "暂无位置") }
      ```
-     
-     - parameter accuracy: 定位精度，默认为 `kCLLocationAccuracyBest`，建议根据业务需求调整。
-     - parameter distanceFilter: 触发 `didUpdateLocations` 事件的最小移动距离，默认 `35` 米，适用于一般导航需求。
      */
-    private init(accuracy: CLLocationAccuracy = kCLLocationAccuracyBest,
-                 distanceFilter: CLLocationDistance = 35) {
+    private override init() {
         locationManager = CLLocationManager()
         super.init()
         
         locationManager.delegate = self
-        locationManager.desiredAccuracy = accuracy
-        locationManager.distanceFilter = distanceFilter
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.distanceFilter = 35
         
         // 空窗期可能是 notDetermined，由 didChangeAuthorization 后续更新为真值。
         // iOS 沿用静态方法、macOS 用实例属性，是两平台读取 API 的固有差异。
