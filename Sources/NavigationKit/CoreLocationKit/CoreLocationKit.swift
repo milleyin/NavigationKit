@@ -77,24 +77,25 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
      `CLLocationManager` 实例，管理设备的定位服务。
      
      - Important: 该对象是 `CoreLocationKit` 的核心组件，负责所有的 GPS 数据更新和权限管理。
+     - Important: 刻意保持 `internal`（非 `public`）——对外暴露会让任何调用方绕开 SDK 的机制层（如 A1 的订阅者门槛、精度参数化）直接操作原始 manager，使封装失去意义。SDK 尚未覆盖的能力应通过扩展公开接口补齐，而非绕道直接访问此对象。
      - Warning: 请确保 `Info.plist` 文件中已正确配置 `NSLocationWhenInUseUsageDescription` 或 `NSLocationAlwaysUsageDescription`，否则调用 `requestLocation()` 可能导致崩溃。
      - Note: `CLLocationManager` 需要在主线程使用，否则部分 API 可能无法正常工作。
      */
-    public let locationManager: CLLocationManager
+    internal let locationManager: CLLocationManager
     
     /**
      发布设备当前位置的 `Combine` 流。
-
+     
      - Important: **订阅此 publisher 即驱动持续定位**——已授权前提下，有订阅者时启动 `startUpdatingLocation` 持续推送，取消订阅（或无任何订阅者）则停止；无人订阅时 SDK 不进行持续定位（要不要持续由调用方订阅与否决定，机制/策略分离）。
      - Attention: 持续定位增加电量消耗。只需「当前位置一次」用 `requestCurrentLocation(timeout:)`；只需「读最近缓存」用 `currentLocation`。
      - Returns: `CLLocation?`，尚无位置信息时为 `nil`。
      - Example:
-```swift
+     ```swift
      locationKit.locationPublisher
      .sink { location in
      print("当前位置: \(String(describing: location))")
      }
-```
+     ```
      */
     public var locationPublisher: AnyPublisher<CLLocation?, Never> {
         locationSubject
