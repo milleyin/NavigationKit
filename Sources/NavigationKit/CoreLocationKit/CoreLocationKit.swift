@@ -62,7 +62,7 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
         // 授权只是其中一个事件源，locationPublisher 订阅数跨 0 是另一个。
         authorizationStatusPublisher
             .removeDuplicates()
-            // 收口主线程，与订阅计数源统一，updateContinuousUpdates 恒在 main
+        // 收口主线程，与订阅计数源统一，updateContinuousUpdates 恒在 main
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 // 状态由方法内部读 currentAuthorizationStatus，不再传参
@@ -115,10 +115,10 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
      获取当前设备的最新位置信息。
      
      - Important: 该属性 **仅返回最新缓存的位置数据**，不会主动触发新的定位请求。
-      - Returns: `CLLocation?`，如果设备尚未提供位置信息，则返回 `nil`。
-      - Note: 缓存由两条路径共同保鲜——「订阅 `locationPublisher` 期间的持续更新」与「`requestCurrentLocation` 单次请求成功」，故其新鲜度不依赖是否开着持续定位；即便无人订阅，只要单次请求成功过，此处即有值。
-      - Note: 若希望主动请求最新位置，请使用 `requestCurrentLocation(timeout:)` 方法。
-      */
+     - Returns: `CLLocation?`，如果设备尚未提供位置信息，则返回 `nil`。
+     - Note: 缓存由两条路径共同保鲜——「订阅 `locationPublisher` 期间的持续更新」与「`requestCurrentLocation` 单次请求成功」，故其新鲜度不依赖是否开着持续定位；即便无人订阅，只要单次请求成功过，此处即有值。
+     - Note: 若希望主动请求最新位置，请使用 `requestCurrentLocation(timeout:)` 方法。
+     */
     public var currentLocation: CLLocation? {
         locationSubject.value
     }
@@ -147,7 +147,7 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
     public var altitudePublisher: AnyPublisher<CLLocationDistance, Never> {
         altitudeSubject.eraseToAnyPublisher()
     }
-
+    
     /// 当前方向数据
     public var currentHeading: CLHeading? {
         headingSubject.value
@@ -169,18 +169,18 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
     /// 持续定位启停取决于「授权就绪 AND 此值 > 0」——无人订阅则不空转持续定位。
     private var locationSubscriberCount = 0
     /**
-    进行中的单次定位请求。
-       requestCurrentLocation(timeout:)` 每次创建一个 `SingleLocationRequest` 并暂存于此，以在请求存续期间维持强引用（否则 delegate 回调不触发）；请求终结后自动移除。
-    */
+     进行中的单次定位请求。
+     requestCurrentLocation(timeout:)` 每次创建一个 `SingleLocationRequest` 并暂存于此，以在请求存续期间维持强引用（否则 delegate 回调不触发）；请求终结后自动移除。
+     */
     private var pendingSingleRequests = Set<SingleLocationRequest>()
     
     /// 授权状态订阅对象（默认值 `notDetermined`，防止 `nil`）
     private let authorizationStatusSubject: CurrentValueSubject<CLAuthorizationStatus, Never> = {
-        #if os(iOS)
+#if os(iOS)
         return CurrentValueSubject(CLLocationManager.authorizationStatus())
-        #elseif os(macOS)
+#elseif os(macOS)
         return CurrentValueSubject(CLLocationManager().authorizationStatus)
-        #endif
+#endif
     }()
     /// 内部长期订阅容器：持有「授权状态驱动持续更新启停」等跟随单例生命周期的订阅
     private var subscriptions = Set<AnyCancellable>()
@@ -210,8 +210,6 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
             restartUpdatingLocation()
         }
     }
-    
-    
 }
 
 // MARK: - CLLocationManagerDelegate
@@ -223,7 +221,7 @@ extension CoreLocationKit {
             errorSubject.send(error)
             return
         }
-
+        
         switch clError.code {
         case .locationUnknown:
             print("位置暂时不可用，等待系统自动重试")
