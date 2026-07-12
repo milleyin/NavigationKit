@@ -200,23 +200,6 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
     /// 错误信息订阅对象
     private let errorSubject = CurrentValueSubject<Swift.Error?, Never>(nil)
     
-    /**
-     允许开发者修改定位精度和距离过滤器
-     
-     - parameter accuracy: 定位精度（默认值 `kCLLocationAccuracyBest`）
-     - parameter distance: 触发 `didUpdateLocations` 事件的最小移动距离（默认值 `35` 米）
-     */
-    public func setLocationAccuracy(_ accuracy: CLLocationAccuracy = kCLLocationAccuracyBest,
-                                    distanceFilter distance: CLLocationDistance = 35) {
-        locationManager.desiredAccuracy = accuracy
-        locationManager.distanceFilter = distance
-        
-        // 改完精度后，若当前已具备发起条件（服务开 + 已授权）则重启持续更新让新精度生效。
-        // 授权判断复用 currentLocationReadiness（读 subject、含平台白名单），不再瞬时读实例属性、不再各写一份白名单。
-        if currentLocationReadiness() == nil {
-            restartUpdatingLocation()
-        }
-    }
 }
 
 // MARK: - CLLocationManagerDelegate
@@ -498,23 +481,6 @@ extension CoreLocationKit {
 
 //MARK: - 内部方法
 extension CoreLocationKit {
-    ///重新获取定位数据
-    private func restartUpdatingLocation() {
-        guard CLLocationManager.locationServicesEnabled() else {
-            print("⚠️ 定位服务未启用，无法重启 `startUpdatingLocation()`")
-            return
-        }
-        locationManager.stopUpdatingLocation()
-        locationManager.startUpdatingLocation()
-        
-        
-        if CLLocationManager.headingAvailable() {
-            locationManager.startUpdatingHeading()
-        } else {
-            print("⚠️ 设备不支持方向数据，跳过 `startUpdatingHeading()`")
-        }
-    }
-    
     /**
      在授权状态尚未决定（`notDetermined`）时发起一次定位授权请求。
      
@@ -597,7 +563,7 @@ extension CoreLocationKit {
         if shouldRun {
             locationManager.startUpdatingLocation()
 #if os(iOS)
-            // heading 仅 iOS 可用；iOS 内再以 headingAvailable() 判定设备磁力计能力，与 restartUpdatingLocation 一致
+            // heading 仅 iOS 可用；以 headingAvailable() 判定设备磁力计能力
             if CLLocationManager.headingAvailable() {
                 locationManager.startUpdatingHeading()
             }
