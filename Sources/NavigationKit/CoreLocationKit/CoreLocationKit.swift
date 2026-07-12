@@ -87,22 +87,29 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
      发布设备当前位置的 `Combine` 流。
      
      - Important: **订阅此 publisher 即驱动持续定位**——已授权前提下，有订阅者时启动 `startUpdatingLocation` 持续推送，取消订阅（或无任何订阅者）则停止；无人订阅时 SDK 不进行持续定位（要不要持续由调用方订阅与否决定，机制/策略分离）。
-     - Attention: 持续定位增加电量消耗。只需「当前位置一次」用 `requestCurrentLocation(timeout:)`；只需「读最近缓存」用 `currentLocation`。
+     - Attention: 持续定位增加电量消耗。只需「当前位置一次」用 `requestCurrentLocation(timeout:accuracy:)`；只需「读最近缓存」用 `currentLocation`。
+     - Parameter accuracy: 定位精度，默认 `kCLLocationAccuracyBest`。在首次订阅触发时写入 `locationManager.desiredAccuracy`。
+     - Parameter distanceFilter: 触发位置上报的最小移动距离（米），默认 `35`。同上，在订阅触发时写入。
      - Returns: `CLLocation?`，尚无位置信息时为 `nil`。
+     - Note: 精度/距离过滤是显式参数而非可变共享状态——避免不相关调用方之间隔空互相影响。若多个订阅者声明不同值，以最近一次触发订阅时的赋值为准（与改动前的语义一致，未新增也未解决多值冲突，仅是表达方式的转移）。
      - Example:
      ```swift
-     locationKit.locationPublisher
+     locationKit.locationPublisher()
      .sink { location in
      print("当前位置: \(String(describing: location))")
      }
      ```
      */
-    public var locationPublisher: AnyPublisher<CLLocation?, Never> {
+    public func locationPublisher(accuracy: CLLocationAccuracy = kCLLocationAccuracyBest, distanceFilter: CLLocationDistance = 35) -> AnyPublisher<CLLocation?, Never> {
         locationSubject
             .handleEvents(
                 receiveSubscription: { [weak self] _ in
-                    // handleEvents 钩子可能在任意线程触发，收口主线程保证计数只在 main 读写
-                    DispatchQueue.main.async { self?.locationSubscriberCountChanged(by: 1) }
+                    // handleEvents 钩子可能在任意线程触发，收口主线程保证赋值与计数一致收口
+                    DispatchQueue.main.async {
+                        self?.locationManager.desiredAccuracy = accuracy
+                        self?.locationManager.distanceFilter = distanceFilter
+                        self?.locationSubscriberCountChanged(by: 1)
+                    }
                 },
                 receiveCancel: { [weak self] in
                     DispatchQueue.main.async { self?.locationSubscriberCountChanged(by: -1) }
