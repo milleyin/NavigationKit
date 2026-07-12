@@ -124,7 +124,7 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
      - Important: 该属性 **仅返回最新缓存的位置数据**，不会主动触发新的定位请求。
      - Returns: `CLLocation?`，如果设备尚未提供位置信息，则返回 `nil`。
      - Note: 缓存由两条路径共同保鲜——「订阅 `locationPublisher` 期间的持续更新」与「`requestCurrentLocation` 单次请求成功」，故其新鲜度不依赖是否开着持续定位；即便无人订阅，只要单次请求成功过，此处即有值。
-     - Note: 若希望主动请求最新位置，请使用 `requestCurrentLocation(timeout:)` 方法。
+     - Note: 若希望主动请求最新位置，请使用 `requestCurrentLocation(timeout:accuracy:)` 方法。
      */
     public var currentLocation: CLLocation? {
         locationSubject.value
@@ -177,7 +177,7 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
     private var locationSubscriberCount = 0
     /**
      进行中的单次定位请求。
-     requestCurrentLocation(timeout:)` 每次创建一个 `SingleLocationRequest` 并暂存于此，以在请求存续期间维持强引用（否则 delegate 回调不触发）；请求终结后自动移除。
+     `requestCurrentLocation(timeout:accuracy:)` 每次创建一个 `SingleLocationRequest` 并暂存于此，以在请求存续期间维持强引用（否则 delegate 回调不触发）；请求终结后自动移除。
      */
     private var pendingSingleRequests = Set<SingleLocationRequest>()
     
@@ -449,7 +449,7 @@ extension CoreLocationKit {
     /**
      校验发起定位请求的前置条件（纯函数）。
      
-     不读取任何系统状态，仅依据传入的参数做判定，因此结果完全确定、可独立单元测试，并被 `requestCurrentLocation(timeout:)`、`currentLocationReadiness()` 共用，确保「授权白名单」只在此处定义一份，不会在多处各写一份而走样。
+     不读取任何系统状态，仅依据传入的参数做判定，因此结果完全确定、可独立单元测试，并被 `requestCurrentLocation(timeout:accuracy:)`、`currentLocationReadiness()` 共用，确保「授权白名单」只在此处定义一份，不会在多处各写一份而走样。
      
      - Parameters:
      - servicesEnabled: 设备定位服务总开关是否开启。
@@ -487,7 +487,7 @@ extension CoreLocationKit {
      
      - Returns: 满足条件返回 `nil`；否则返回阻碍发起的具体 `LocationError`。
      - Note: 仅做「能否发起」的快照判定，不触发定位、也不等待授权就绪。
-     - Important: 这是同步快照——启动空窗期内 subject 尚为 `notDetermined` 时会如实反映该状态、并非系统真值；需要可靠结果应走会「等就绪」的 `requestCurrentLocation(timeout:)`。
+     - Important: 这是同步快照——启动空窗期内 subject 尚为 `notDetermined` 时会如实反映该状态、并非系统真值；需要可靠结果应走会「等就绪」的 `requestCurrentLocation(timeout:accuracy:)`。
      */
     public func currentLocationReadiness() -> LocationError? {
         // 授权状态统一取自 subject（单一真相源），不再瞬时读实例属性——后者在启动空窗期会得到假 notDetermined。
@@ -674,7 +674,7 @@ extension CoreLocationKit {
 /**
  一次性定位请求的执行器。
  
- 用于支撑 `CoreLocationKit.requestCurrentLocation(timeout:)` 的「请求一次」语义。每次单次请求都创建一个独立实例，持有自己**独立的** `CLLocationManager`，与 `CoreLocationKit` 主实例的持续定位（`locationPublisher` 背后的 manager）完全隔离。
+ 用于支撑 `CoreLocationKit.requestCurrentLocation(timeout:accuracy:)`的「请求一次」语义。每次单次请求都创建一个独立实例，持有自己**独立的** `CLLocationManager`，与 `CoreLocationKit` 主实例的持续定位（`locationPublisher` 背后的 manager）完全隔离。
  
  - Important: 采用独立 manager 的根本原因——单次请求拿到位置后需要 `stop`，若复用主 manager 的 `stopUpdatingLocation()`，会**误停主实例的持续更新**，掐断其它正在订阅 `locationPublisher` 的使用者。独立实例彻底规避此冲突。
  - Important: 本类必须在请求存续期间被强引用持有（由 `CoreLocationKit` 用集合持有），否则方法返回后实例即释放，`CLLocationManagerDelegate` 回调永不触发。请求终结（成功 / 失败 / 超时）后通过 `onFinish` 回调通知持有者解除持有。
