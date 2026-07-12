@@ -668,7 +668,7 @@ private final class SingleLocationRequest: NSObject, CLLocationManagerDelegate {
      创建并立即发起一次定位请求。
  
      - Parameters:
-       - desiredAccuracy: 期望精度，沿用主实例的精度设置以保持一致。
+     - desiredAccuracy: 期望精度，由调用方（`CoreLocationKit.makeSingleLocationRequest`）显式传入，与主实例状态完全独立，不借用、不受其影响。
        - timeout: 超时时限（秒）。超时后以 `LocationError.timeout` 失败，不重试。
        - completion: 唯一结果回调（成功位置 / 失败错误）。
        - onFinish: 请求终结后调用，回传本实例自身，供持有者精确解除强引用。
