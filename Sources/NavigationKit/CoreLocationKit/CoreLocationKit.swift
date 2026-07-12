@@ -24,32 +24,30 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
      初始化 `CoreLocationKit` 单例，统一管理 `CoreLocation` 相关的定位服务。
      
      - Important: 该类为单例模式，不能手动初始化，必须通过 `CoreLocationKit.shared` 访问。
-     - Attention: 仅在 `shared` 访问时初始化，所有定位服务在 `init` 时即开启。
+     - Attention: 仅在 `shared` 访问时初始化。`init` 本身不触发授权请求、不开始任何定位——是否请求授权、是否持续定位，均由调用方通过 `requestAuthorizationIfNeeded()` / 订阅 `locationPublisher(...)` 显式决定（机制/策略分离）。
      - Bug: 在 iOS 14 及以上，`requestWhenInUseAuthorization()` 可能需要在主线程调用，否则可能无效。
      - Warning: 请确保在 `Info.plist` 文件中添加 `NSLocationWhenInUseUsageDescription` 或 `NSLocationAlwaysUsageDescription`，否则 `requestWhenInUseAuthorization()` 将导致崩溃。
      - Requires: 适用于 `iOS 13.0+`，需要 `CoreLocation` 框架支持。
-     - Remark: `desiredAccuracy` 影响耗电量，`distanceFilter` 影响更新频率，合理设置可优化性能。
+     - Remark: `desiredAccuracy` 影响耗电量，`distanceFilter` 影响更新频率；两者不再通过 `init` 定制，改为在 `locationPublisher(accuracy:distanceFilter:)` / `requestCurrentLocation(accuracy:)` 每次发起定位时显式声明。
      - Note: `distanceFilter = kCLDistanceFilterNone` 表示始终触发 `didUpdateLocations`，不建议长期使用。
-     - Precondition: 必须确保 `locationServicesEnabled()` 返回 `true`，否则 `requestLocation()` 无效。
-     - Postcondition: 在初始化完成后，将立即请求授权并开始定位。
+     - Precondition: 必须确保 `CLLocationManager.locationServicesEnabled()` 返回 `true`，否则任何定位请求均无效。
+     - Postcondition: 初始化完成后不会自动请求授权或开始定位，处于完全被动状态，等待调用方显式触发。
      
      # 使用示例
      ```swift
      let locationKit = CoreLocationKit.shared
-     locationKit.setLocationAccuracy(.nearestTenMeters, distanceFilter: 10)
+     locationKit.requestAuthorizationIfNeeded()
+     locationKit.locationPublisher(accuracy: kCLLocationAccuracyNearestTenMeters, distanceFilter: 10)
+     .sink { location in print(location ?? "暂无位置") }
      ```
-     
-     - parameter accuracy: 定位精度，默认为 `kCLLocationAccuracyBest`，建议根据业务需求调整。
-     - parameter distanceFilter: 触发 `didUpdateLocations` 事件的最小移动距离，默认 `35` 米，适用于一般导航需求。
      */
-    private init(accuracy: CLLocationAccuracy = kCLLocationAccuracyBest,
-                 distanceFilter: CLLocationDistance = 35) {
+    private override init() {
         locationManager = CLLocationManager()
         super.init()
         
         locationManager.delegate = self
-        locationManager.desiredAccuracy = accuracy
-        locationManager.distanceFilter = distanceFilter
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.distanceFilter = 35
         
         // 空窗期可能是 notDetermined，由 didChangeAuthorization 后续更新为真值。
         // iOS 沿用静态方法、macOS 用实例属性，是两平台读取 API 的固有差异。
@@ -64,7 +62,7 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
         // 授权只是其中一个事件源，locationPublisher 订阅数跨 0 是另一个。
         authorizationStatusPublisher
             .removeDuplicates()
-            // 收口主线程，与订阅计数源统一，updateContinuousUpdates 恒在 main
+        // 收口主线程，与订阅计数源统一，updateContinuousUpdates 恒在 main
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 // 状态由方法内部读 currentAuthorizationStatus，不再传参
@@ -79,31 +77,39 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
      `CLLocationManager` 实例，管理设备的定位服务。
      
      - Important: 该对象是 `CoreLocationKit` 的核心组件，负责所有的 GPS 数据更新和权限管理。
+     - Important: 刻意保持 `internal`（非 `public`）——对外暴露会让任何调用方绕开 SDK 的机制层（如 A1 的订阅者门槛、精度参数化）直接操作原始 manager，使封装失去意义。SDK 尚未覆盖的能力应通过扩展公开接口补齐，而非绕道直接访问此对象。
      - Warning: 请确保 `Info.plist` 文件中已正确配置 `NSLocationWhenInUseUsageDescription` 或 `NSLocationAlwaysUsageDescription`，否则调用 `requestLocation()` 可能导致崩溃。
      - Note: `CLLocationManager` 需要在主线程使用，否则部分 API 可能无法正常工作。
      */
-    public let locationManager: CLLocationManager
+    internal let locationManager: CLLocationManager
     
     /**
      发布设备当前位置的 `Combine` 流。
-
+     
      - Important: **订阅此 publisher 即驱动持续定位**——已授权前提下，有订阅者时启动 `startUpdatingLocation` 持续推送，取消订阅（或无任何订阅者）则停止；无人订阅时 SDK 不进行持续定位（要不要持续由调用方订阅与否决定，机制/策略分离）。
-     - Attention: 持续定位增加电量消耗。只需「当前位置一次」用 `requestCurrentLocation(timeout:)`；只需「读最近缓存」用 `currentLocation`。
+     - Attention: 持续定位增加电量消耗。只需「当前位置一次」用 `requestCurrentLocation(timeout:accuracy:)`；只需「读最近缓存」用 `currentLocation`。
+     - Parameter accuracy: 定位精度，默认 `kCLLocationAccuracyBest`。在首次订阅触发时写入 `locationManager.desiredAccuracy`。
+     - Parameter distanceFilter: 触发位置上报的最小移动距离（米），默认 `35`。同上，在订阅触发时写入。
      - Returns: `CLLocation?`，尚无位置信息时为 `nil`。
+     - Note: 精度/距离过滤是显式参数而非可变共享状态——避免不相关调用方之间隔空互相影响。若多个订阅者声明不同值，以最近一次触发订阅时的赋值为准（与改动前的语义一致，未新增也未解决多值冲突，仅是表达方式的转移）。
      - Example:
-```swift
-     locationKit.locationPublisher
+     ```swift
+     locationKit.locationPublisher()
      .sink { location in
      print("当前位置: \(String(describing: location))")
      }
-```
+     ```
      */
-    public var locationPublisher: AnyPublisher<CLLocation?, Never> {
+    public func locationPublisher(accuracy: CLLocationAccuracy = kCLLocationAccuracyBest, distanceFilter: CLLocationDistance = 35) -> AnyPublisher<CLLocation?, Never> {
         locationSubject
             .handleEvents(
                 receiveSubscription: { [weak self] _ in
-                    // handleEvents 钩子可能在任意线程触发，收口主线程保证计数只在 main 读写
-                    DispatchQueue.main.async { self?.locationSubscriberCountChanged(by: 1) }
+                    // handleEvents 钩子可能在任意线程触发，收口主线程保证赋值与计数一致收口
+                    DispatchQueue.main.async {
+                        self?.locationManager.desiredAccuracy = accuracy
+                        self?.locationManager.distanceFilter = distanceFilter
+                        self?.locationSubscriberCountChanged(by: 1)
+                    }
                 },
                 receiveCancel: { [weak self] in
                     DispatchQueue.main.async { self?.locationSubscriberCountChanged(by: -1) }
@@ -116,10 +122,10 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
      获取当前设备的最新位置信息。
      
      - Important: 该属性 **仅返回最新缓存的位置数据**，不会主动触发新的定位请求。
-      - Returns: `CLLocation?`，如果设备尚未提供位置信息，则返回 `nil`。
-      - Note: 缓存由两条路径共同保鲜——「订阅 `locationPublisher` 期间的持续更新」与「`requestCurrentLocation` 单次请求成功」，故其新鲜度不依赖是否开着持续定位；即便无人订阅，只要单次请求成功过，此处即有值。
-      - Note: 若希望主动请求最新位置，请使用 `requestCurrentLocation(timeout:)` 方法。
-      */
+     - Returns: `CLLocation?`，如果设备尚未提供位置信息，则返回 `nil`。
+     - Note: 缓存由两条路径共同保鲜——「订阅 `locationPublisher` 期间的持续更新」与「`requestCurrentLocation` 单次请求成功」，故其新鲜度不依赖是否开着持续定位；即便无人订阅，只要单次请求成功过，此处即有值。
+     - Note: 若希望主动请求最新位置，请使用 `requestCurrentLocation(timeout:accuracy:)` 方法。
+     */
     public var currentLocation: CLLocation? {
         locationSubject.value
     }
@@ -148,7 +154,7 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
     public var altitudePublisher: AnyPublisher<CLLocationDistance, Never> {
         altitudeSubject.eraseToAnyPublisher()
     }
-
+    
     /// 当前方向数据
     public var currentHeading: CLHeading? {
         headingSubject.value
@@ -170,18 +176,18 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
     /// 持续定位启停取决于「授权就绪 AND 此值 > 0」——无人订阅则不空转持续定位。
     private var locationSubscriberCount = 0
     /**
-    进行中的单次定位请求。
-       requestCurrentLocation(timeout:)` 每次创建一个 `SingleLocationRequest` 并暂存于此，以在请求存续期间维持强引用（否则 delegate 回调不触发）；请求终结后自动移除。
-    */
+     进行中的单次定位请求。
+     `requestCurrentLocation(timeout:accuracy:)` 每次创建一个 `SingleLocationRequest` 并暂存于此，以在请求存续期间维持强引用（否则 delegate 回调不触发）；请求终结后自动移除。
+     */
     private var pendingSingleRequests = Set<SingleLocationRequest>()
     
     /// 授权状态订阅对象（默认值 `notDetermined`，防止 `nil`）
     private let authorizationStatusSubject: CurrentValueSubject<CLAuthorizationStatus, Never> = {
-        #if os(iOS)
+#if os(iOS)
         return CurrentValueSubject(CLLocationManager.authorizationStatus())
-        #elseif os(macOS)
+#elseif os(macOS)
         return CurrentValueSubject(CLLocationManager().authorizationStatus)
-        #endif
+#endif
     }()
     /// 内部长期订阅容器：持有「授权状态驱动持续更新启停」等跟随单例生命周期的订阅
     private var subscriptions = Set<AnyCancellable>()
@@ -194,25 +200,6 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
     /// 错误信息订阅对象
     private let errorSubject = CurrentValueSubject<Swift.Error?, Never>(nil)
     
-    /**
-     允许开发者修改定位精度和距离过滤器
-     
-     - parameter accuracy: 定位精度（默认值 `kCLLocationAccuracyBest`）
-     - parameter distance: 触发 `didUpdateLocations` 事件的最小移动距离（默认值 `35` 米）
-     */
-    public func setLocationAccuracy(_ accuracy: CLLocationAccuracy = kCLLocationAccuracyBest,
-                                    distanceFilter distance: CLLocationDistance = 35) {
-        locationManager.desiredAccuracy = accuracy
-        locationManager.distanceFilter = distance
-        
-        // 改完精度后，若当前已具备发起条件（服务开 + 已授权）则重启持续更新让新精度生效。
-        // 授权判断复用 currentLocationReadiness（读 subject、含平台白名单），不再瞬时读实例属性、不再各写一份白名单。
-        if currentLocationReadiness() == nil {
-            restartUpdatingLocation()
-        }
-    }
-    
-    
 }
 
 // MARK: - CLLocationManagerDelegate
@@ -224,7 +211,7 @@ extension CoreLocationKit {
             errorSubject.send(error)
             return
         }
-
+        
         switch clError.code {
         case .locationUnknown:
             print("位置暂时不可用，等待系统自动重试")
@@ -334,12 +321,13 @@ extension CoreLocationKit {
      主动触发定位硬件获取**一个新的**位置，与「读取缓存快照」（`currentLocation`）和「持续订阅」（`locationPublisher`）是三种不同语义，互不替代。
      
      实现要点：
-     - **授权状态异步**：不在调用瞬间硬读授权状态（进程启动有「空窗期」，瞬时读会得到假 `notDetermined`），而是订阅授权状态、等其「就绪」（非 `notDetermined`）后再决策；尚未决定时先经收敛入口触发授权请求。已授权时因 `CurrentValueSubject` 重放当前值而零额外等待。
-     - 使用一个**独立的** `CLLocationManager`（封装在 `SingleLocationRequest` 内）执行本次请求，与主实例的持续定位完全隔离，不会干扰正在订阅 `locationPublisher` 的使用者。
+     - **授权状态异步**：不在调用瞬间硬读授权状态（进程启动有「空窗期」，瞬时读会得到假 `notDetermined`），而是订阅授权状态、等其「就绪」（非 `notDetermined`）后再决策。是否请求授权由调用方决定（见 `requestAuthorizationIfNeeded`）——未主动请求过时，状态停在 `notDetermined`，下方等待链会在 timeout 后正常失败，与「已拒绝」殊途同归。已授权时因 `CurrentValueSubject` 重放当前值而零额外等待。
+     - 使用一个**独立的** `CLLocationManager`（封装在 `SingleLocationRequest` 内）执行本次请求，与主实例的持续定位完全隔离，不会干扰正在订阅 `locationPublisher` 的使用者；精度也随参数显式传入、不借用主实例状态，隔离彻底。
      - 取得首个有效位置后立即停止该独立 manager，信守「取一次、省电」的语义。
      - 不自动重试。
      
      - Parameter timeout: 超时时限（秒），默认 10。涵盖「等待授权就绪」与「单次定位测量」——任一阶段超时均以 `LocationError.timeout` 失败。常态（已授权）下等待就绪近乎瞬时，timeout 实际作用于测量阶段。
+     - Parameter accuracy: 本次请求的定位精度，默认 `kCLLocationAccuracyBest`。仅作用于本次独立请求，不影响 `locationPublisher` 或其它并发的单次请求。
      - Returns: 发出**单个** `CLLocation` 后立即完成的 publisher；失败时发出错误。
      - Note: 是否重试由调用方决定——可对返回值施加 `.retry(_:)`。SDK 不内置重试。
      - Note: 若只需「此刻的缓存位置、可能为 nil」，应改用 `currentLocation` 属性，零等待零耗电；若需持续跟踪，应订阅 `locationPublisher`。
@@ -354,27 +342,24 @@ extension CoreLocationKit {
      .store(in: &subscriptions)
      ```
      */
-    public func requestCurrentLocation(timeout: TimeInterval = 10) -> AnyPublisher<CLLocation, Swift.Error> {
+    public func requestCurrentLocation(timeout: TimeInterval = 10,
+                                       accuracy: CLLocationAccuracy = kCLLocationAccuracyBest) -> AnyPublisher<CLLocation, Swift.Error> {
         // 步骤1：服务总开关无空窗期，可瞬时判断；关闭则直接失败，不必进入等待
         guard CLLocationManager.locationServicesEnabled() else {
             return Fail(error: LocationError.locationServicesDisabled).eraseToAnyPublisher()
         }
         
-        // 步骤2：尚未决定授权时经收敛入口发起授权请求；已决定则为 no-op
-        requestAuthorizationIfNeeded()
-        
-        // 步骤3~5：订阅授权状态，等其「就绪」（非 notDetermined）后再决策。
-        // 不再瞬时读 status —— 授权状态是异步的，启动空窗期内瞬时读会得到假 notDetermined。
-        // authorizationStatusSubject 是 CurrentValueSubject，订阅即重放当前值：已授权时当前值即真值，
-        // filter 立即放行、零额外等待；空窗期当前值为 notDetermined，被滤掉，待 didChangeAuthorization 送真值后再放行。
+        // 步骤2：订阅授权状态，等其「就绪」（非 notDetermined）后再决策。
+        // 是否请求授权由调用方决定（见 requestAuthorizationIfNeeded）——未主动请求过时，状态停在
+        // notDetermined，下方等待链会在 timeout 后正常失败，与「已拒绝」殊途同归。
         return authorizationStatusPublisher
             .filter { $0 != .notDetermined }
             .first()
-            .setFailureType(to: Swift.Error.self)            // Never → Error，以承接下方 timeout 与 flatMap 的错误流
+            .setFailureType(to: Swift.Error.self)
             .timeout(
                 .seconds(timeout),
                 scheduler: DispatchQueue.main,
-                customError: { LocationError.timeout }        // 等就绪超时：回调迟迟不到则失败，不无限挂起
+                customError: { LocationError.timeout }
             )
             .flatMap { [weak self] status -> AnyPublisher<CLLocation, Swift.Error> in
                 guard let self = self else {
@@ -385,7 +370,7 @@ extension CoreLocationKit {
                     return Fail(error: blocker).eraseToAnyPublisher()
                 }
                 // 就绪且在白名单 → 发起单次定位；测量阶段超时由 SingleLocationRequest 内部计时负责
-                return self.makeSingleLocationRequest(timeout: timeout)
+                return self.makeSingleLocationRequest(timeout: timeout, accuracy: accuracy)
             }
             .handleEvents(receiveOutput: { [weak self] location in
                 //单次成功也回写快照，使 currentLocation 独立于持续定位订阅——A1 后无人订阅时持续更新不跑，靠此保鲜。
@@ -447,7 +432,7 @@ extension CoreLocationKit {
     /**
      校验发起定位请求的前置条件（纯函数）。
      
-     不读取任何系统状态，仅依据传入的参数做判定，因此结果完全确定、可独立单元测试，并被 `requestCurrentLocation(timeout:)`、`currentLocationReadiness()` 共用，确保「授权白名单」只在此处定义一份，不会在多处各写一份而走样。
+     不读取任何系统状态，仅依据传入的参数做判定，因此结果完全确定、可独立单元测试，并被 `requestCurrentLocation(timeout:accuracy:)`、`currentLocationReadiness()` 共用，确保「授权白名单」只在此处定义一份，不会在多处各写一份而走样。
      
      - Parameters:
      - servicesEnabled: 设备定位服务总开关是否开启。
@@ -485,7 +470,7 @@ extension CoreLocationKit {
      
      - Returns: 满足条件返回 `nil`；否则返回阻碍发起的具体 `LocationError`。
      - Note: 仅做「能否发起」的快照判定，不触发定位、也不等待授权就绪。
-     - Important: 这是同步快照——启动空窗期内 subject 尚为 `notDetermined` 时会如实反映该状态、并非系统真值；需要可靠结果应走会「等就绪」的 `requestCurrentLocation(timeout:)`。
+     - Important: 这是同步快照——启动空窗期内 subject 尚为 `notDetermined` 时会如实反映该状态、并非系统真值；需要可靠结果应走会「等就绪」的 `requestCurrentLocation(timeout:accuracy:)`。
      */
     public func currentLocationReadiness() -> LocationError? {
         // 授权状态统一取自 subject（单一真相源），不再瞬时读实例属性——后者在启动空窗期会得到假 notDetermined。
@@ -496,31 +481,15 @@ extension CoreLocationKit {
 
 //MARK: - 内部方法
 extension CoreLocationKit {
-    ///重新获取定位数据
-    private func restartUpdatingLocation() {
-        guard CLLocationManager.locationServicesEnabled() else {
-            print("⚠️ 定位服务未启用，无法重启 `startUpdatingLocation()`")
-            return
-        }
-        locationManager.stopUpdatingLocation()
-        locationManager.startUpdatingLocation()
-        
-        
-        if CLLocationManager.headingAvailable() {
-            locationManager.startUpdatingHeading()
-        } else {
-            print("⚠️ 设备不支持方向数据，跳过 `startUpdatingHeading()`")
-        }
-    }
-    
     /**
      在授权状态尚未决定（`notDetermined`）时发起一次定位授权请求。
      
      - Note: 判断依据取自 `currentAuthorizationStatus`（即 `authorizationStatusSubject` 当前值）
      - Note: 可安全重复调用——系统对已决定授权的 App 会忽略重复的 `requestWhenInUseAuthorization()`（不弹框、无副作用）；仅在 `notDetermined` 时正常弹出授权框。
      - Important: `requestWhenInUseAuthorization()` 要求在主线程调用，故派发至主队列。
+     - Note: 触发时机由调用方决定（机制/策略分离）——`requestCurrentLocation` 不再内部自动调用，何时请求授权、要不要请求，交由调用方编排。
      */
-    private func requestAuthorizationIfNeeded() {
+    public func requestAuthorizationIfNeeded() {
         // 仅在「尚未决定」时请求；已授权 / 已拒绝状态下无需打扰
         guard currentAuthorizationStatus == .notDetermined else { return }
         // requestWhenInUseAuthorization 要求主线程调用
@@ -530,28 +499,26 @@ extension CoreLocationKit {
     }
     
     /**
-     创建并发起一次独立的单次定位请求，桥接为 Combine publisher。
-     
-     封装 `SingleLocationRequest` 的生命周期：请求存续期间由 `pendingSingleRequests` 维持强引用，终结后自动解除。仅由 `requestCurrentLocation(timeout:)` 在授权就绪后调用。
+     封装 `SingleLocationRequest` 的生命周期：请求存续期间由 `pendingSingleRequests` 维持强引用，终结后自动解除。仅由 `requestCurrentLocation(timeout:accuracy:)` 在授权就绪后调用。
      
      - Parameter timeout: 单次测量的超时时限（秒），透传给 `SingleLocationRequest` 内部计时。
+     - Parameter accuracy: 本次单次测量使用的定位精度，由调用方（`requestCurrentLocation`）显式传入，不借用主实例的 `locationManager.desiredAccuracy`。
      - Returns: 发出单个 `CLLocation` 后完成的 publisher；失败时发出错误。
      */
-    private func makeSingleLocationRequest(timeout: TimeInterval) -> AnyPublisher<CLLocation, Swift.Error> {
+    private func makeSingleLocationRequest(timeout: TimeInterval, accuracy: CLLocationAccuracy) -> AnyPublisher<CLLocation, Swift.Error> {
         Future<CLLocation, Swift.Error> { [weak self] promise in
             guard let self = self else {
                 promise(.failure(LocationError.locationUnavailable))
                 return
             }
             let request = SingleLocationRequest(
-                desiredAccuracy: self.locationManager.desiredAccuracy,
+                desiredAccuracy: accuracy,
                 timeout: timeout,
                 completion: { result in
                     promise(result)
                 },
                 onFinish: { [weak self] finished in
-                    // 终结时由 SingleLocationRequest 回传自身，据此解除持有——
-                    // 不再用外部 var 捕获，从根上消除「实例 → onFinish → 捕获变量 → 实例」的自持有环
+                    // 终结时由 SingleLocationRequest 回传自身，据此解除持有
                     self?.pendingSingleRequests.remove(finished)
                 }
             )
@@ -596,7 +563,7 @@ extension CoreLocationKit {
         if shouldRun {
             locationManager.startUpdatingLocation()
 #if os(iOS)
-            // heading 仅 iOS 可用；iOS 内再以 headingAvailable() 判定设备磁力计能力，与 restartUpdatingLocation 一致
+            // heading 仅 iOS 可用；以 headingAvailable() 判定设备磁力计能力
             if CLLocationManager.headingAvailable() {
                 locationManager.startUpdatingHeading()
             }
@@ -673,7 +640,7 @@ extension CoreLocationKit {
 /**
  一次性定位请求的执行器。
  
- 用于支撑 `CoreLocationKit.requestCurrentLocation(timeout:)` 的「请求一次」语义。每次单次请求都创建一个独立实例，持有自己**独立的** `CLLocationManager`，与 `CoreLocationKit` 主实例的持续定位（`locationPublisher` 背后的 manager）完全隔离。
+ 用于支撑 `CoreLocationKit.requestCurrentLocation(timeout:accuracy:)`的「请求一次」语义。每次单次请求都创建一个独立实例，持有自己**独立的** `CLLocationManager`，与 `CoreLocationKit` 主实例的持续定位（`locationPublisher` 背后的 manager）完全隔离。
  
  - Important: 采用独立 manager 的根本原因——单次请求拿到位置后需要 `stop`，若复用主 manager 的 `stopUpdatingLocation()`，会**误停主实例的持续更新**，掐断其它正在订阅 `locationPublisher` 的使用者。独立实例彻底规避此冲突。
  - Important: 本类必须在请求存续期间被强引用持有（由 `CoreLocationKit` 用集合持有），否则方法返回后实例即释放，`CLLocationManagerDelegate` 回调永不触发。请求终结（成功 / 失败 / 超时）后通过 `onFinish` 回调通知持有者解除持有。
@@ -701,7 +668,7 @@ private final class SingleLocationRequest: NSObject, CLLocationManagerDelegate {
      创建并立即发起一次定位请求。
  
      - Parameters:
-       - desiredAccuracy: 期望精度，沿用主实例的精度设置以保持一致。
+     - desiredAccuracy: 期望精度，由调用方（`CoreLocationKit.makeSingleLocationRequest`）显式传入，与主实例状态完全独立，不借用、不受其影响。
        - timeout: 超时时限（秒）。超时后以 `LocationError.timeout` 失败，不重试。
        - completion: 唯一结果回调（成功位置 / 失败错误）。
        - onFinish: 请求终结后调用，回传本实例自身，供持有者精确解除强引用。
