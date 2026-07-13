@@ -36,11 +36,10 @@ extension NavigationKit {
      - Remark: 该方法适用于“快速接入”的场景，例如公路导航、骑行记录等，不需要自行管理海拔处理管线的应用。
      - Note: 若对水平距离计算有更高精度要求（如基于轨迹纠偏、地图匹配等），建议**不要使用本默认管道**，而是在上层自行调用`ElevationManager.processAltitudeSample(rawAltitude:horizontalDistance:)` 进行更精细控制。
      - Precondition: `CoreLocationKit.shared` 已完成初始化，且应用的 Info.plist 中已配置必要的定位权限字段（如 `NSLocationWhenInUseUsageDescription` 等）。
-     - Postcondition: 成功调用后，`ElevationManager` 将随位置更新自动计算：
-     - 平滑海拔（`smoothedAltitude`）
-     - 累计爬升（`elevationGain`）
-     - 累计下降（`elevationLoss`）
-     - 当前坡度（`gradient`，单位：百分比 %）
+     - Postcondition: 成功调用后，`ElevationManager` 将随位置更新自动计算：平滑海拔（`smoothedAltitude`）、累计爬升（`elevationGain`）、累计下降（`elevationLoss`）、当前坡度（`gradient`，单位：百分比 %）
+     - parameter 无: 本方法不接受任何参数，内部直接使用 `CoreLocationKit.shared.locationPublisher()`（使用 SDK 默认精度/距离过滤参数）。
+     - Returns: 无返回值。
+     - Throws: 不抛出错误，所有异常情况通过日志或上层状态观察处理。
      
      # 使用示例
      ```swift
@@ -55,10 +54,6 @@ extension NavigationKit {
      }
      .store(in: &subscriptions)
      ```
-     
-     - parameter 无: 本方法不接受任何参数，内部直接使用 `CoreLocationKit.shared.locationPublisher()`（使用 SDK 默认精度/距离过滤参数）。
-     - Returns: 无返回值。
-     - Throws: 不抛出错误，所有异常情况通过日志或上层状态观察处理。
      */
     public static func startDefaultElevationPipeline() {
         guard isElevationPipelineStarted == false else { return }
