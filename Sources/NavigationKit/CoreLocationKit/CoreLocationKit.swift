@@ -71,7 +71,8 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
             .store(in: &subscriptions)
     }
     
-    
+    /// `CLLocationManagerDelegate` 的私有代理转发器。详见类型定义处的说明。
+    private let delegateProxy = LocationManagerDelegateProxy()
     
     /**
      `CLLocationManager` 实例，管理设备的定位服务。
@@ -576,6 +577,93 @@ extension CoreLocationKit {
             }
 #endif
         }
+    }
+}
+
+// MARK: - CLLocationManagerDelegate 处理逻辑（internal，不再直接对外实现协议）
+
+extension CoreLocationKit {
+
+    /**
+     处理定位失败事件的实际逻辑。
+
+     - Note: 不再是协议见证方法——`CoreLocationKit` 本身不直接实现 `CLLocationManagerDelegate`（见 `LocationManagerDelegateProxy` 的说明），此方法由代理转发调用。`internal` 可见性确保外部调用方无法直接构造伪造回调注入数据，同时对本模块内的代理转发保持可达。
+     */
+    internal func handleDidFailWithError(_ error: Swift.Error) {
+        guard let clError = error as? CLError else {
+            errorSubject.send(error)
+            return
+        }
+
+        switch clError.code {
+        case .locationUnknown:
+            print("位置暂时不可用，等待系统自动重试")
+        case .denied:
+            errorSubject.send(LocationError.permissionDenied)
+            print("⚠️ 用户拒绝了位置权限")
+        case .network:
+            errorSubject.send(LocationError.locationUnavailable)
+            print("⚠️ 位置获取失败，可能是网络问题")
+        case .headingFailure:
+            print("⚠️ 方向数据不可用，可能是磁场干扰")
+        default:
+            errorSubject.send(error)
+        }
+    }
+
+    /// 处理授权状态变化的实际逻辑，说明同上。
+    internal func handleDidChangeAuthorization(_ status: CLAuthorizationStatus) {
+        // 仅把最新授权状态送入 subject；持续更新的启停由 init 中订阅 subject 的响应式管线统一处理（归一/去重）。
+        authorizationStatusSubject.send(status)
+    }
+
+    /// 处理位置更新的实际逻辑，说明同上。
+    internal func handleDidUpdateLocations(_ locations: [CLLocation]) {
+        guard let lastLocation = locations.last else {
+            print("⚠️ `didUpdateLocations` 收到空位置数组，可能是 CoreLocation 异常行为")
+            return
+        }
+        print("✅ 成功获取位置: \(lastLocation.coordinate.latitude), \(lastLocation.coordinate.longitude)")
+        locationSubject.send(lastLocation)
+
+        // 原生速度（m/s）
+        let rawSpeed = lastLocation.speed >= 0 ? lastLocation.speed : 0
+        speedSubject.send(rawSpeed)
+
+        // 海拔（米）
+        altitudeSubject.send(lastLocation.altitude)
+    }
+
+    /// 处理方向更新的实际逻辑，说明同上。
+    internal func handleDidUpdateHeading(_ newHeading: CLHeading) {
+        headingSubject.send(newHeading)
+    }
+}
+
+/**
+ `CLLocationManagerDelegate` 的私有代理转发器。
+
+ - Important: `CoreLocationKit` 本身不直接实现 `CLLocationManagerDelegate`——若直接实现，因 `CoreLocationKit` 是 `public` 类型、协议本身也是 `public`，Swift 编译期会强制要求见证方法的可见性不低于协议本身（即被迫全部 `public`），这正是这个代理类存在的原因：本类型本身
+   是 `private`，其协议见证方法因而不受该约束，可以是隐式 `internal`；真正的处理逻辑保留在`CoreLocationKit` 的 `internal` 方法里（见上方 `handleDid...` 系列），代理只做一行转发。效果：外部调用方既拿不到可直接调用的 `public` delegate 方法，也拿不到这个代理类型本身（`private`），彻底堵死伪造回调注入数据的口子。
+ - Note: `owner` 用 `weak`，避免与 `CoreLocationKit`（持有本代理强引用）之间形成循环引用。
+ */
+private final class LocationManagerDelegateProxy: NSObject, CLLocationManagerDelegate {
+    weak var owner: CoreLocationKit?
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Swift.Error) {
+        owner?.handleDidFailWithError(error)
+    }
+
+    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        owner?.handleDidChangeAuthorization(status)
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        owner?.handleDidUpdateLocations(locations)
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        owner?.handleDidUpdateHeading(newHeading)
     }
 }
 
