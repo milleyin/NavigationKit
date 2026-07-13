@@ -129,7 +129,7 @@ final class CoreLocationKitTests: XCTestCase {
         let kit = CoreLocationKit.shared
         let mock = CLLocation(latitude: 25.0, longitude: 121.0)
 
-        kit.locationManager(kit.locationManager, didUpdateLocations: [mock])
+        kit.handleDidUpdateLocations([mock])
 
         XCTAssertEqual(kit.currentLocation?.coordinate.latitude ?? 0, 25.0, accuracy: 0.0001)
         XCTAssertEqual(kit.currentLocation?.coordinate.longitude ?? 0, 121.0, accuracy: 0.0001)
@@ -153,7 +153,7 @@ final class CoreLocationKitTests: XCTestCase {
             }
             .store(in: &subscriptions)
         
-        kit.locationManager(kit.locationManager, didUpdateLocations: [mock])
+        kit.handleDidUpdateLocations([mock])
         wait(for: [expectation], timeout: 1)
     }
 
@@ -178,7 +178,7 @@ final class CoreLocationKitTests: XCTestCase {
             altitude: 10, horizontalAccuracy: 5, verticalAccuracy: 5,
             course: 0, speed: 10.0, timestamp: Date()
         )
-        kit.locationManager(kit.locationManager, didUpdateLocations: [mock])
+        kit.handleDidUpdateLocations([mock])
         wait(for: [expectation], timeout: 1)
     }
 
@@ -194,7 +194,7 @@ final class CoreLocationKitTests: XCTestCase {
             altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
             course: 0, speed: 5.0, timestamp: Date()
         )
-        kit.locationManager(kit.locationManager, didUpdateLocations: [warmUp])
+        kit.handleDidUpdateLocations([warmUp])
 
         let expectation = expectation(description: "负速度应归零")
         kit.speedPublisher
@@ -210,7 +210,7 @@ final class CoreLocationKitTests: XCTestCase {
             altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
             course: 0, speed: -1.0, timestamp: Date()
         )
-        kit.locationManager(kit.locationManager, didUpdateLocations: [invalid])
+        kit.handleDidUpdateLocations([invalid])
         wait(for: [expectation], timeout: 1)
     }
 
@@ -234,7 +234,7 @@ final class CoreLocationKitTests: XCTestCase {
             altitude: 123.45, horizontalAccuracy: 5, verticalAccuracy: 5,
             course: 0, speed: 0, timestamp: Date()
         )
-        kit.locationManager(kit.locationManager, didUpdateLocations: [mock])
+        kit.handleDidUpdateLocations([mock])
         wait(for: [expectation], timeout: 1)
     }
 
