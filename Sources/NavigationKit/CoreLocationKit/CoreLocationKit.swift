@@ -15,7 +15,7 @@ import Combine
 import UIKit
 #endif
 
-public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManagerDelegate {
+public final class CoreLocationKit: NSObject, ObservableObject {
     
     /// 单例
     public static let shared = CoreLocationKit()
@@ -43,9 +43,11 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
      */
     private override init() {
         locationManager = CLLocationManager()
+        
         super.init()
         
-        locationManager.delegate = self
+        delegateProxy.owner = self
+        locationManager.delegate = delegateProxy
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = 35
         
@@ -203,57 +205,7 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
     
 }
 
-// MARK: - CLLocationManagerDelegate
 
-extension CoreLocationKit {
-    
-    public func locationManager(_ manager: CLLocationManager, didFailWithError error: Swift.Error) {
-        guard let clError = error as? CLError else {
-            errorSubject.send(error)
-            return
-        }
-        
-        switch clError.code {
-        case .locationUnknown:
-            print("位置暂时不可用，等待系统自动重试")
-        case .denied:
-            errorSubject.send(LocationError.permissionDenied)
-            print("⚠️ 用户拒绝了位置权限")
-        case .network:
-            errorSubject.send(LocationError.locationUnavailable)
-            print("⚠️ 位置获取失败，可能是网络问题")
-        case .headingFailure:
-            print("⚠️ 方向数据不可用，可能是磁场干扰")
-        default:
-            errorSubject.send(error)
-        }
-    }
-    
-    public func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
-        // 仅把最新授权状态送入 subject；持续更新的启停由 init 中订阅 subject 的响应式管线统一处理（归一/去重）。
-        authorizationStatusSubject.send(status)
-    }
-    
-    public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let lastLocation = locations.last else {
-            print("⚠️ `didUpdateLocations` 收到空位置数组，可能是 CoreLocation 异常行为")
-            return
-        }
-        print("✅ 成功获取位置: \(lastLocation.coordinate.latitude), \(lastLocation.coordinate.longitude)")
-        locationSubject.send(lastLocation)
-        
-        // 原生速度（m/s）
-        let rawSpeed = lastLocation.speed >= 0 ? lastLocation.speed : 0
-        speedSubject.send(rawSpeed)
-        
-        // 海拔（米）
-        altitudeSubject.send(lastLocation.altitude)
-    }
-    
-    public func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
-        headingSubject.send(newHeading)
-    }
-}
 
 
 //MARK: - 外部方法函数
