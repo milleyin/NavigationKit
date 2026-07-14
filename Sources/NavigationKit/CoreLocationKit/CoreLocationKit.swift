@@ -168,28 +168,28 @@ public final class CoreLocationKit: NSObject, ObservableObject {
     }
 #endif
     
-    /// 速度发布者（单位：m/s）
-    public var speedPublisher: AnyPublisher<CLLocationSpeed, Never> {
-        speedSubject.eraseToAnyPublisher()
-    }
-    /// 海拔高度发布者（单位：米）
-    public var altitudePublisher: AnyPublisher<CLLocationDistance, Never> {
-        altitudeSubject.eraseToAnyPublisher()
-    }
-    
-    /// 当前方向数据
-    public var currentHeading: CLHeading? {
-        headingSubject.value
-    }
-    /// 当前海拔（米）
-    public var currentAltitude: CLLocationDistance {
-        altitudeSubject.value
-    }
-    /// 位置错误发布者
-    public var errorPublisher: AnyPublisher<Swift.Error?, Never> {
-        errorSubject.eraseToAnyPublisher()
-    }
-    
+//    /// 速度发布者（单位：m/s）
+//    public var speedPublisher: AnyPublisher<CLLocationSpeed, Never> {
+//        speedSubject.eraseToAnyPublisher()
+//    }
+//    /// 海拔高度发布者（单位：米）
+//    public var altitudePublisher: AnyPublisher<CLLocationDistance, Never> {
+//        altitudeSubject.eraseToAnyPublisher()
+//    }
+//    
+//    /// 当前方向数据
+//    public var currentHeading: CLHeading? {
+//        headingSubject.value
+//    }
+//    /// 当前海拔（米）
+//    public var currentAltitude: CLLocationDistance {
+//        altitudeSubject.value
+//    }
+//    /// 位置错误发布者
+//    public var errorPublisher: AnyPublisher<Swift.Error?, Never> {
+//        errorSubject.eraseToAnyPublisher()
+//    }
+//    
     
     /// 位置订阅对象
     private let locationSubject = CurrentValueSubject<CLLocation?, Never>(nil)
@@ -220,12 +220,12 @@ public final class CoreLocationKit: NSObject, ObservableObject {
     /// 方向更新的启停自成一套，不再随持续定位的订阅状态被动连带。
     private var headingSubscriberCount = 0
 #endif
-    /// 速度订阅对象（m/s）
-    private let speedSubject = CurrentValueSubject<CLLocationSpeed, Never>(0)
-    /// 内部海拔订阅对象
-    private let altitudeSubject = CurrentValueSubject<CLLocationDistance, Never>(0)
-    /// 错误信息订阅对象
-    private let errorSubject = CurrentValueSubject<Swift.Error?, Never>(nil)
+//    /// 速度订阅对象（m/s）
+//    private let speedSubject = CurrentValueSubject<CLLocationSpeed, Never>(0)
+//    /// 内部海拔订阅对象
+//    private let altitudeSubject = CurrentValueSubject<CLLocationDistance, Never>(0)
+//    /// 错误信息订阅对象
+//    private let errorSubject = CurrentValueSubject<Swift.Error?, Never>(nil)
     
 }
 
@@ -589,7 +589,6 @@ extension CoreLocationKit {
      */
     internal func handleDidFailWithError(_ error: Swift.Error) {
         guard let clError = error as? CLError else {
-            errorSubject.send(error)
             return
         }
 
@@ -597,15 +596,13 @@ extension CoreLocationKit {
         case .locationUnknown:
             print("位置暂时不可用，等待系统自动重试")
         case .denied:
-            errorSubject.send(LocationError.permissionDenied)
             print("⚠️ 用户拒绝了位置权限")
         case .network:
-            errorSubject.send(LocationError.locationUnavailable)
             print("⚠️ 位置获取失败，可能是网络问题")
         case .headingFailure:
             print("⚠️ 方向数据不可用，可能是磁场干扰")
         default:
-            errorSubject.send(error)
+            print("⚠️ 定位发生未分类错误：\(clError.localizedDescription)")
         }
     }
 
@@ -624,12 +621,6 @@ extension CoreLocationKit {
         print("✅ 成功获取位置: \(lastLocation.coordinate.latitude), \(lastLocation.coordinate.longitude)")
         locationSubject.send(lastLocation)
 
-        // 原生速度（m/s）
-        let rawSpeed = lastLocation.speed >= 0 ? lastLocation.speed : 0
-        speedSubject.send(rawSpeed)
-
-        // 海拔（米）
-        altitudeSubject.send(lastLocation.altitude)
     }
 #if os(iOS)
     /// 处理方向更新的实际逻辑，说明同上。
