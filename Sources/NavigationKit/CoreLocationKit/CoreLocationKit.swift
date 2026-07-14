@@ -238,10 +238,8 @@ extension CoreLocationKit {
     /**
      提供基于当前位置的反向地理编码（地址解析）功能，并通过 `Publisher` 返回地址字符串。
      
-     - Important: 该 `Publisher` 仅在 `currentLocation` 可用时执行，
-     若 `currentLocation == nil`，则直接返回 `LocationError.locationUnavailable`。
-     - Attention: 反向地理编码是异步操作，调用 `addressPublisher` 不会立即返回地址，
-     需要订阅 `Publisher` 以获取解析结果。
+     - Important: 该 `Publisher` 仅在 `currentLocation` 可用时执行，若 `currentLocation == nil`，则直接返回 `LocationError.locationUnavailable`。
+     - Attention: 反向地理编码是异步操作，调用 `addressPublisher` 不会立即返回地址，需要订阅 `Publisher` 以获取解析结果。
      - Warning: `CLGeocoder` 在短时间内调用过多次可能会被系统限制，影响解析功能。
      - Note: 返回的地址字符串格式如下：`街道, 门牌号, 城市, 省份, 邮政编码, 国家`。
      

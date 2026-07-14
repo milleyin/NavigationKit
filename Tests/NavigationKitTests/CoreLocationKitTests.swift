@@ -240,21 +240,25 @@ final class CoreLocationKitTests: XCTestCase {
 
     // MARK: - Publisher 初始值契约
 
-    /**
-     headingPublisher 初始值应为 nil（CurrentValueSubject(nil)）。
-     纯属初始状态契约，不依赖真实传感器。
-     */
-    func testHeadingPublisher_initialValueIsNil() {
-        let expectation = expectation(description: "headingPublisher 初始值")
-        CoreLocationKit.shared.headingPublisher
-            .first()
-            .sink { heading in
-                // 注：若此前测试已注入过 heading，此断言可能受单例状态影响；
-                // heading 在本套件中无注入路径，故初始仍应为 nil。
-                XCTAssertNil(heading, "初始 heading 应为 nil")
-                expectation.fulfill()
-            }
-            .store(in: &subscriptions)
-        wait(for: [expectation], timeout: 1)
-    }
+    #if os(iOS)
+        /**
+         headingPublisher 初始值应为 nil（CurrentValueSubject(nil)）。
+         纯属初始状态契约，不依赖真实传感器。
+         - Note: headingPublisher() 本身仅 iOS 可用（v1.7.0 起整体包进 #if os(iOS)），
+           此测试随之仅在 iOS 编译目标下存在；macOS 目标下这个方法不存在，无需也无法测试。
+         */
+        func testHeadingPublisher_initialValueIsNil() {
+            let expectation = expectation(description: "headingPublisher 初始值")
+            CoreLocationKit.shared.headingPublisher()
+                .first()
+                .sink { heading in
+                    // 注：若此前测试已注入过 heading，此断言可能受单例状态影响；
+                    // heading 在本套件中无注入路径，故初始仍应为 nil。
+                    XCTAssertNil(heading, "初始 heading 应为 nil")
+                    expectation.fulfill()
+                }
+                .store(in: &subscriptions)
+            wait(for: [expectation], timeout: 1)
+        }
+    #endif
 }
