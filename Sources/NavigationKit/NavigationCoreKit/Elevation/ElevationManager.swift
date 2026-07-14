@@ -99,19 +99,20 @@ public final class ElevationManager: ObservableObject {
      绑定一个海拔数据流（Publisher），并通过回调提供水平距离，用于计算坡度。
      
      - Important: 该方法不会假设数据来源，可以对接 `CoreLocationKit`、
-       轨迹回放、文件导入等各种来源。
+     轨迹回放、文件导入等各种来源。
      
      - parameter publisher: 任意发出 `Double` 类型海拔值（单位：米）的 Publisher。
      - parameter horizontalDistanceProvider: 一个回调，用于根据上一点和当前点提供水平距离（米）。
-       若返回 `nil` 或距离无效，则本次不计算坡度，仅更新海拔与爬升统计。
+     若返回 `nil` 或距离无效，则本次不计算坡度，仅更新海拔与爬升统计。
      
      # 使用示例
      ```swift
      elevationManager.bindAltitudePublisher(
-         CoreLocationKit.shared.altitudePublisher.map(Double.init)
+     CoreLocationKit.shared.locationPublisher()
+     .compactMap { $0?.altitude }
      ) { _, _ in
-         // 这里可以结合自己的距离计算逻辑
-         return 5.0 // 单位：米
+     // 这里可以结合自己的距离计算逻辑
+     return 5.0 // 单位：米
      }
      ```
      
