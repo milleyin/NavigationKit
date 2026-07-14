@@ -555,6 +555,7 @@ extension CoreLocationKit {
      */
     internal func handleDidFailWithError(_ error: Swift.Error) {
         guard let clError = error as? CLError else {
+            print("⚠️ 定位失败：\(error.localizedDescription)")
             return
         }
 
