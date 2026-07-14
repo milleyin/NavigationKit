@@ -13,7 +13,7 @@ import NavigationCoreKit
 
 public enum NavigationKit {
     /// NavigationKit 版本号
-    public static let version: String = "1.6.0(2026051)"
+    public static let version: String = "1.7.0(2026052)"
 }
 
 //MARK: - Elevation
@@ -36,11 +36,10 @@ extension NavigationKit {
      - Remark: 该方法适用于“快速接入”的场景，例如公路导航、骑行记录等，不需要自行管理海拔处理管线的应用。
      - Note: 若对水平距离计算有更高精度要求（如基于轨迹纠偏、地图匹配等），建议**不要使用本默认管道**，而是在上层自行调用`ElevationManager.processAltitudeSample(rawAltitude:horizontalDistance:)` 进行更精细控制。
      - Precondition: `CoreLocationKit.shared` 已完成初始化，且应用的 Info.plist 中已配置必要的定位权限字段（如 `NSLocationWhenInUseUsageDescription` 等）。
-     - Postcondition: 成功调用后，`ElevationManager` 将随位置更新自动计算：
-     - 平滑海拔（`smoothedAltitude`）
-     - 累计爬升（`elevationGain`）
-     - 累计下降（`elevationLoss`）
-     - 当前坡度（`gradient`，单位：百分比 %）
+     - Postcondition: 成功调用后，`ElevationManager` 将随位置更新自动计算：平滑海拔（`smoothedAltitude`）、累计爬升（`elevationGain`）、累计下降（`elevationLoss`）、当前坡度（`gradient`，单位：百分比 %）
+     - parameter 无: 本方法不接受任何参数，内部直接使用 `CoreLocationKit.shared.locationPublisher()`（使用 SDK 默认精度/距离过滤参数）。
+     - Returns: 无返回值。
+     - Throws: 不抛出错误，所有异常情况通过日志或上层状态观察处理。
      
      # 使用示例
      ```swift
@@ -55,10 +54,6 @@ extension NavigationKit {
      }
      .store(in: &subscriptions)
      ```
-     
-     - parameter 无: 本方法不接受任何参数，内部直接使用 `CoreLocationKit.shared.locationPublisher()`（使用 SDK 默认精度/距离过滤参数）。
-     - Returns: 无返回值。
-     - Throws: 不抛出错误，所有异常情况通过日志或上层状态观察处理。
      */
     public static func startDefaultElevationPipeline() {
         guard isElevationPipelineStarted == false else { return }
@@ -88,31 +83,19 @@ extension NavigationKit {
     /**
      停止默认的海拔计算数据管道，并重置相关内部状态。
      
-     - Important: 调用本方法后，`NavigationKit` 将不再从 `CoreLocationKit` 接收位置更新，
-     默认海拔管道被完全关闭，直到再次调用 `startDefaultElevationPipeline()`。
-     - Attention: 本方法会调用 `ElevationManager.reset()`（需要在 `ElevationManager` 中提供实现），
-     用于清空平滑海拔、累计爬升/下降、坡度等内部统计，适合在“结束一次记录”或“重置状态”
-     的场景中使用。
-     - Bug: 若上层在仍需使用默认海拔管道时误调用本方法，将导致后续不再更新海拔与坡度数据，
-     需要重新调用 `startDefaultElevationPipeline()` 以恢复。
-     - Warning: 本方法会将 `subscriptions` 清空，意味着所有通过
-     `startDefaultElevationPipeline()` 建立的内部订阅都会被释放，无法恢复先前的状态。
+     - Important: 调用本方法后，`NavigationKit` 将不再从 `CoreLocationKit` 接收位置更新，默认海拔管道被完全关闭，直到再次调用 `startDefaultElevationPipeline()`。
+     - Attention: 本方法会调用 `ElevationManager.reset()`（需要在 `ElevationManager` 中提供实现），用于清空平滑海拔、累计爬升/下降、坡度等内部统计，适合在“结束一次记录”或“重置状态”的场景中使用。
+     - Bug: 若上层在仍需使用默认海拔管道时误调用本方法，将导致后续不再更新海拔与坡度数据，需要重新调用 `startDefaultElevationPipeline()` 以恢复。
+     - Warning: 本方法会将 `subscriptions` 清空，意味着所有通过 `startDefaultElevationPipeline()` 建立的内部订阅都会被释放，无法恢复先前的状态。
      - Requires: 应在确定当前不再需要默认海拔管道（例如停止轨迹记录、退出导航模式）时调用。
-     - Remark: 该方法不会影响上层自行构建的其它订阅逻辑，仅作用于
-     `NavigationKit` 内部维护的默认 Elevation 管道。
-     - Note:
-     - 如果你希望在不同“记录 Session”之间重用同一个 `ElevationManager` 实例，
-     推荐在每次开始新 Session 前调用一次 `stopElevationPipeline()`，
-     然后再调用 `startDefaultElevationPipeline()`，以保证统计数据干净。
-     - 如果你不希望在停止时清空历史统计，可在自定义版本中移除对 `reset()` 的调用。
-     - Precondition: `startDefaultElevationPipeline()` 曾被调用且当前处于已启动状态；
-     否则本方法将安静返回，不做任何操作。
-     - Postcondition:
-     - 默认海拔数据管道被完全停止；
-     - 内部订阅集合 `subscriptions` 被清空；
-     - `lastLocation` 被重置为 `nil`；
-     - `isElevationPipelineStarted` 被重置为 `false`；
-     - `elevationManager` 的内部统计算法状态被 `reset()` 清空（取决于你的实现）。
+     - Remark: 该方法不会影响上层自行构建的其它订阅逻辑，仅作用于 `NavigationKit` 内部维护的默认 Elevation 管道。
+     - Note: 如果你希望在不同“记录 Session”之间重用同一个 `ElevationManager` 实例，推荐在每次开始新 Session 前调用一次 `stopElevationPipeline()`，然后再调用 `startDefaultElevationPipeline()`，以保证统计数据干净。
+     - Note: 如果你不希望在停止时清空历史统计，可在自定义版本中移除对 `reset()` 的调用。
+     - Precondition: `startDefaultElevationPipeline()` 曾被调用且当前处于已启动状态；否则本方法将安静返回，不做任何操作。
+     - Postcondition: 默认海拔数据管道被完全停止；内部订阅集合 `subscriptions` 被清空； `lastLocation` 被重置为 `nil`； `isElevationPipelineStarted` 被重置为 `false`； `elevationManager` 的内部统计算法状态被 `reset()` 清空（取决于你的实现）。
+     - parameter 无: 本方法不接受任何参数。
+     - Returns: 无返回值。
+     - Throws: 不抛出错误。
      
      # 使用示例
      ```swift
@@ -122,10 +105,6 @@ extension NavigationKit {
      // 再次开始新一段记录：
      NavigationKit.startDefaultElevationPipeline()
      ```
-     
-     - parameter 无: 本方法不接受任何参数。
-     - Returns: 无返回值。
-     - Throws: 不抛出错误。
      */
     public static func stopElevationPipeline() {
         guard isElevationPipelineStarted else { return }
@@ -146,13 +125,13 @@ extension NavigationKit {
 
 // MARK: - Speed
 extension NavigationKit {
-
+    
     /// 全局 SpeedManager
     public static let speedManager = SpeedManager()
-
+    
     private static var speedSubscriptions: Set<AnyCancellable> = .init()
     private static var isSpeedPipelineRunning = false
-
+    
     /**
      启动默认速度管线，自动将 CoreLocationKit 的原始速度（m/s）
      → 清洗 → 转换 → 滤波 → 死区处理 → speedKmh 输出。
@@ -162,8 +141,9 @@ extension NavigationKit {
     public static func startDefaultSpeedPipeline() {
         guard isSpeedPipelineRunning == false else { return }
         isSpeedPipelineRunning = true
-
-        CoreLocationKit.shared.speedPublisher
+        
+        CoreLocationKit.shared.locationPublisher()
+            .compactMap { $0?.speed }
             .sink { rawSpeedMs in
                 speedManager.bindSpeedPublisher(
                     Just(rawSpeedMs).eraseToAnyPublisher()
@@ -171,17 +151,17 @@ extension NavigationKit {
             }
             .store(in: &speedSubscriptions)
     }
-
+    
     /**
      停止速度管线，清理订阅并重置 SpeedManager 状态。
      */
     public static func stopSpeedPipeline() {
         guard isSpeedPipelineRunning else { return }
-
+        
         speedSubscriptions.removeAll()
         speedManager.reset()
         isSpeedPipelineRunning = false
-
+        
         print("Speed pipeline stopped.")
     }
 }

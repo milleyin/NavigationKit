@@ -15,7 +15,7 @@ import Combine
 import UIKit
 #endif
 
-public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManagerDelegate {
+public final class CoreLocationKit: NSObject, ObservableObject {
     
     /// 单例
     public static let shared = CoreLocationKit()
@@ -43,9 +43,11 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
      */
     private override init() {
         locationManager = CLLocationManager()
+        
         super.init()
         
-        locationManager.delegate = self
+        delegateProxy.owner = self
+        locationManager.delegate = delegateProxy
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = 35
         
@@ -62,16 +64,20 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
         // 授权只是其中一个事件源，locationPublisher 订阅数跨 0 是另一个。
         authorizationStatusPublisher
             .removeDuplicates()
-        // 收口主线程，与订阅计数源统一，updateContinuousUpdates 恒在 main
+        // 收口主线程，与订阅计数源统一，updateContinuousUpdates 恒在 main, updateHeadingUpdates 同理
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 // 状态由方法内部读 currentAuthorizationStatus，不再传参
                 self?.updateContinuousUpdates()
+#if os(iOS)
+                self?.updateHeadingUpdates()
+#endif
             }
             .store(in: &subscriptions)
     }
     
-    
+    /// `CLLocationManagerDelegate` 的私有代理转发器。详见类型定义处的说明。
+    private let delegateProxy = LocationManagerDelegateProxy()
     
     /**
      `CLLocationManager` 实例，管理设备的定位服务。
@@ -141,33 +147,26 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
         authorizationStatusSubject.value
     }
     
-    /// 方向数据发布者
-    public var headingPublisher: AnyPublisher<CLHeading?, Never> {
-        headingSubject.eraseToAnyPublisher()
+#if os(iOS)
+    /**
+     发布设备方向数据的 `Combine` 流（仅 iOS）。
+
+     - Important: 订阅此 publisher 即驱动方向更新——已授权前提下，有订阅者且设备支持磁力计（`CLLocationManager.headingAvailable()`）时启动 `startUpdatingHeading`，无订阅者则停止。独立于 `locationPublisher` 的订阅状态，互不连带（此前版本里订阅 `locationPublisher` 会隐式启动 heading，属越权耦合，这里已解耦）。
+     - Returns: `CLHeading?`，尚无方向数据时为 `nil`。
+     */
+    public func headingPublisher() -> AnyPublisher<CLHeading?, Never> {
+        headingSubject
+            .handleEvents(
+                receiveSubscription: { [weak self] _ in
+                    DispatchQueue.main.async { self?.headingSubscriberCountChanged(by: 1) }
+                },
+                receiveCancel: { [weak self] in
+                    DispatchQueue.main.async { self?.headingSubscriberCountChanged(by: -1) }
+                }
+            )
+            .eraseToAnyPublisher()
     }
-    
-    /// 速度发布者（单位：m/s）
-    public var speedPublisher: AnyPublisher<CLLocationSpeed, Never> {
-        speedSubject.eraseToAnyPublisher()
-    }
-    /// 海拔高度发布者（单位：米）
-    public var altitudePublisher: AnyPublisher<CLLocationDistance, Never> {
-        altitudeSubject.eraseToAnyPublisher()
-    }
-    
-    /// 当前方向数据
-    public var currentHeading: CLHeading? {
-        headingSubject.value
-    }
-    /// 当前海拔（米）
-    public var currentAltitude: CLLocationDistance {
-        altitudeSubject.value
-    }
-    /// 位置错误发布者
-    public var errorPublisher: AnyPublisher<Swift.Error?, Never> {
-        errorSubject.eraseToAnyPublisher()
-    }
-    
+#endif
     
     /// 位置订阅对象
     private let locationSubject = CurrentValueSubject<CLLocation?, Never>(nil)
@@ -193,127 +192,20 @@ public final class CoreLocationKit: NSObject, ObservableObject, CLLocationManage
     private var subscriptions = Set<AnyCancellable>()
     /// 方向订阅对象
     private let headingSubject = CurrentValueSubject<CLHeading?, Never>(nil)
-    /// 速度订阅对象（m/s）
-    private let speedSubject = CurrentValueSubject<CLLocationSpeed, Never>(0)
-    /// 内部海拔订阅对象
-    private let altitudeSubject = CurrentValueSubject<CLLocationDistance, Never>(0)
-    /// 错误信息订阅对象
-    private let errorSubject = CurrentValueSubject<Swift.Error?, Never>(nil)
+#if os(iOS)
+    /// `headingPublisher` 当前活跃订阅者数（仅在主线程读写）。独立于 `locationSubscriberCount`，
+    /// 方向更新的启停自成一套，不再随持续定位的订阅状态被动连带。
+    private var headingSubscriberCount = 0
+#endif
     
 }
 
-// MARK: - CLLocationManagerDelegate
 
-extension CoreLocationKit {
-    
-    public func locationManager(_ manager: CLLocationManager, didFailWithError error: Swift.Error) {
-        guard let clError = error as? CLError else {
-            errorSubject.send(error)
-            return
-        }
-        
-        switch clError.code {
-        case .locationUnknown:
-            print("位置暂时不可用，等待系统自动重试")
-        case .denied:
-            errorSubject.send(LocationError.permissionDenied)
-            print("⚠️ 用户拒绝了位置权限")
-        case .network:
-            errorSubject.send(LocationError.locationUnavailable)
-            print("⚠️ 位置获取失败，可能是网络问题")
-        case .headingFailure:
-            print("⚠️ 方向数据不可用，可能是磁场干扰")
-        default:
-            errorSubject.send(error)
-        }
-    }
-    
-    public func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
-        // 仅把最新授权状态送入 subject；持续更新的启停由 init 中订阅 subject 的响应式管线统一处理（归一/去重）。
-        authorizationStatusSubject.send(status)
-    }
-    
-    public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let lastLocation = locations.last else {
-            print("⚠️ `didUpdateLocations` 收到空位置数组，可能是 CoreLocation 异常行为")
-            return
-        }
-        print("✅ 成功获取位置: \(lastLocation.coordinate.latitude), \(lastLocation.coordinate.longitude)")
-        locationSubject.send(lastLocation)
-        
-        // 原生速度（m/s）
-        let rawSpeed = lastLocation.speed >= 0 ? lastLocation.speed : 0
-        speedSubject.send(rawSpeed)
-        
-        // 海拔（米）
-        altitudeSubject.send(lastLocation.altitude)
-    }
-    
-    public func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
-        headingSubject.send(newHeading)
-    }
-}
 
 
 //MARK: - 外部方法函数
 
 extension CoreLocationKit {
-    /**
-     提供基于当前位置的反向地理编码（地址解析）功能，并通过 `Publisher` 返回地址字符串。
-     
-     - Important: 该 `Publisher` 仅在 `currentLocation` 可用时执行，
-     若 `currentLocation == nil`，则直接返回 `LocationError.locationUnavailable`。
-     - Attention: 反向地理编码是异步操作，调用 `addressPublisher` 不会立即返回地址，
-     需要订阅 `Publisher` 以获取解析结果。
-     - Warning: `CLGeocoder` 在短时间内调用过多次可能会被系统限制，影响解析功能。
-     - Note: 返回的地址字符串格式如下：`街道, 门牌号, 城市, 省份, 邮政编码, 国家`。
-     
-     # 使用示例
-     ```swift
-     CoreLocationKit.shared.addressPublisher
-     .sink(receiveCompletion: { completion in
-     if case .failure(let error) = completion {
-     print("地址解析失败: \(error)")
-     }
-     }, receiveValue: { address in
-     print("当前位置地址: \(address)")
-     })
-     .store(in: &subscriptions)
-     ```
-     
-     - Returns: `AnyPublisher<String, Swift.Error>`，返回解析出的地址字符串，或错误。
-     - Throws: `LocationError.locationUnavailable` 若 `currentLocation` 不可用。
-     - Throws: `LocationError.geoEncodingFailed` 若 `CLGeocoder` 解析失败。
-     - Throws: `LocationError.noAddressFound` 若未能找到匹配的地址。
-     */
-    public var addressPublisher: AnyPublisher<String, Swift.Error> {
-        guard let location = currentLocation else {
-            return Fail(error: LocationError.locationUnavailable).eraseToAnyPublisher()
-        }
-        
-        return Future { promise in
-            CLGeocoder().reverseGeocodeLocation(location) { placemarks, error in
-                if let error = error {
-                    return promise(.failure(LocationError.geoEncodingFailed(originalError: error)))
-                }
-                guard let placemark = placemarks?.first else {
-                    return promise(.failure(LocationError.noAddressFound))
-                }
-                
-                let address = [
-                    placemark.thoroughfare,
-                    placemark.subThoroughfare,
-                    placemark.locality,
-                    placemark.administrativeArea,
-                    placemark.postalCode,
-                    placemark.country
-                ].compactMap { $0 }.joined(separator: ", ")
-                
-                promise(.success(address))
-            }
-        }
-        .eraseToAnyPublisher()
-    }
     
     /**
      请求一次当前位置。
@@ -383,21 +275,12 @@ extension CoreLocationKit {
     }
     
     /**
-     设置是否允许后台位置更新。
+     配置是否允许应用在进入后台后继续接收位置更新（仅 iOS）。
      
-     - Important: 仅当应用拥有 **`authorizedAlways`** 权限时才可启用后台定位。若当前授权状态不是 `authorizedAlways`，则不会修改 `allowsBackgroundLocationUpdates`，并会打印警告信息。
-     - Attention: 启用后台定位可能会显著增加电量消耗，应仅在必要时使用。
-     - Warning: 若未在 `Info.plist` 添加 `UIBackgroundModes` -> `location`，即使设置 `allowsBackgroundLocationUpdates = true`，后台定位仍不会生效。
-     - Note:
-     - iOS 13+ 需要用户在系统设置中 **手动开启** `Always Allow`。
-     - 后台定位适用于 **步行导航、车辆跟踪、健身应用** 等场景。
-     
-     # 使用示例
-     ```swift
-     CoreLocationKit.shared.allowBackgroundLocationUpdates(true)
-     ```
-     
-     - parameter allowed: 是否允许后台定位，`true` 开启，`false` 关闭。
+     - Parameter allowed: `true` 允许后台持续定位，`false` 关闭（系统在应用进入后台时可能自动暂停更新）。
+     - Important: 生效前提有三：① 授权状态必须是 `.authorizedAlways`（`.authorizedWhenInUse` 不满足，系统本身不允许非 Always 授权的 App 后台定位）；② 平台必须是 iOS（macOS 无此概念，`#else`分支只打印提示，不做任何操作）；③系统级"后台应用刷新"（`UIApplication.backgroundRefreshStatus`）必须为 `.available`——用户可能在系统设置里关闭了这个开关，此时即便调用本方法也不会生效，只会打印诊断日志，不会抛错或崩溃。
+     - Note: 本设置与 `locationPublisher()` 的订阅状态相互独立，但**只有在实际有持续定位在跑时才有意义**——若调用本方法时 `locationPublisher()` 尚无订阅者（`locationSubscriberCount == 0`），持续定位本就没有运行，`allowsBackgroundLocationUpdates`/`pausesLocationUpdatesAutomatically`这两个底层属性虽然被正确设置，但不会有任何可观察的效果，需等到有订阅者、持续定位真正启动后才会体现。这不是 bug，只是设置生效的自然前提。
+     - Note: 这是一个可随时调整的运行期偏好（类似音量旋钮），不像 `locationPublisher(accuracy:distanceFilter:)`那样是"订阅时一次性声明、贯穿订阅期间"的静态参数，因此维持独立方法、不并入订阅参数列表。
      */
     public func allowBackgroundLocationUpdates(_ allowed: Bool) {
         
@@ -426,6 +309,8 @@ extension CoreLocationKit {
 #endif
     }
 }
+
+
 
 //MARK: - 前置条件校验
 extension CoreLocationKit {
@@ -476,6 +361,62 @@ extension CoreLocationKit {
         // 授权状态统一取自 subject（单一真相源），不再瞬时读实例属性——后者在启动空窗期会得到假 notDetermined。
         // subject 为 CLAuthorizationStatus（平台无关），故无需再按平台 #if 区分读取方式。
         return Self.validatePreconditions(servicesEnabled: CLLocationManager.locationServicesEnabled(), status: currentAuthorizationStatus)
+    }
+}
+
+//MARK: - 外部工具方法
+extension CoreLocationKit {
+    /**
+     反向地理编码：将坐标转换为候选地标列表。
+     
+     - Parameter location: 待反查的坐标，由调用方显式传入——不隐式依赖 `currentLocation`，可对任意坐标反查，不限于设备当前位置。
+     - Returns: 发出候选 `[CLPlacemark]`（保证至少一个元素）后完成的 publisher；查无结果或失败时发出错误。`CLPlacemark` 自带结构化地址字段（`thoroughfare`/`locality`/…）及坐标，取哪一个候选、如何格式化成可读文本，由调用方决定——SDK 不做预设。
+     - Warning: `CLGeocoder` 在短时间内调用过多次可能会被系统限制，影响解析功能。
+     - Note: 一次性操作，正确用法需 `.store(in:)` 持有返回的 `AnyCancellable`，否则订阅可能在结果返回前被提前释放、导致收不到回调（Combine `Future` 型一次性操作的通用注意事项，参见 `requestCurrentLocation` 的用法示例）。
+     - Example:
+     ```swift
+     CoreLocationKit.shared.reverseGeocode(someLocation)
+     .sink(receiveCompletion: { _ in }, receiveValue: { placemarks in
+     print(placemarks.first?.locality ?? "未知")
+     })
+     .store(in: &subscriptions)
+     ```
+     */
+    public func reverseGeocode(_ location: CLLocation) -> AnyPublisher<[CLPlacemark], Swift.Error> {
+        Future { promise in
+            CLGeocoder().reverseGeocodeLocation(location) { placemarks, error in
+                if let error = error {
+                    return promise(.failure(LocationError.geoEncodingFailed(originalError: error)))
+                }
+                guard let placemarks = placemarks, !placemarks.isEmpty else {
+                    return promise(.failure(LocationError.noAddressFound))
+                }
+                promise(.success(placemarks))
+            }
+        }
+        .eraseToAnyPublisher()
+    }
+    
+    /**
+     正向地理编码：将地址描述转换为候选地标列表。
+     
+     - Parameter addressString: 待查询的地址描述（如"台北101"、"1 Infinite Loop, Cupertino, CA"）。
+     - Returns: 发出候选 `[CLPlacemark]`（保证至少一个元素，每个候选可经 `.location` 取得坐标）后完成的 publisher；查无结果或失败时发出错误。一个地址字符串可能对应多个真实不同的候选（如地址重名），该信任系统默认排序、按距离筛选、还是交给用户选，是调用方的策略判断，SDK 不预设答案。
+     - Note: 一次性操作，用法注意事项同 `reverseGeocode(_:)`。
+     */
+    public func geocode(_ addressString: String) -> AnyPublisher<[CLPlacemark], Swift.Error> {
+        Future { promise in
+            CLGeocoder().geocodeAddressString(addressString) { placemarks, error in
+                if let error = error {
+                    return promise(.failure(LocationError.geoEncodingFailed(originalError: error)))
+                }
+                guard let placemarks = placemarks, !placemarks.isEmpty else {
+                    return promise(.failure(LocationError.noAddressFound))
+                }
+                promise(.success(placemarks))
+            }
+        }
+        .eraseToAnyPublisher()
     }
 }
 
@@ -544,11 +485,45 @@ extension CoreLocationKit {
         }
     }
     
+#if os(iOS)
     /**
-     持续定位 / 方向更新的单一启停入口，由两个事件源驱动重新评估：授权状态变化（`init` 的授权 sink）、`locationPublisher` 订阅数跨 0 变化（`locationSubscriberCountChanged`）。两源都收口主线程，故本方法恒在 main 执行。
+     调整 `headingPublisher` 订阅者计数，并在「有无订阅者」跨 0 变化时重新评估方向更新启停。
+     
+     - Parameter delta: 增量（订阅 +1 / 取消 -1）。
+     - Important: 必须在主线程调用（由 `headingPublisher` 的 `handleEvents` 钩子派发主队列保证）。
+     - Note: 仅 0↔1 跨越时才触发 `updateHeadingUpdates()`，与 `locationSubscriberCountChanged` 同一模式。
+     */
+    private func headingSubscriberCountChanged(by delta: Int) {
+        let hadSubscribers = headingSubscriberCount > 0
+        headingSubscriberCount += delta
+        let hasSubscribers = headingSubscriberCount > 0
+        if hadSubscribers != hasSubscribers {
+            updateHeadingUpdates()
+        }
+    }
+    
+    /**
+     方向更新的独立启停入口，与 `updateContinuousUpdates`（位置）完全分离——heading 不再
+     依附 `locationSubscriberCount`，自己的订阅数说了算。
+     */
+    private func updateHeadingUpdates() {
+        let status = currentAuthorizationStatus
+        let authorized = (status == .authorizedWhenInUse || status == .authorizedAlways)
+        let shouldRun = authorized && headingSubscriberCount > 0 && CLLocationManager.headingAvailable()
+        if shouldRun {
+            locationManager.startUpdatingHeading()
+        } else {
+            locationManager.stopUpdatingHeading()
+        }
+    }
+#endif
+    
+    /**
+     持续定位的单一启停入口，由两个事件源驱动重新评估：授权状态变化（`init` 的授权 sink）、`locationPublisher` 订阅数跨 0 变化（`locationSubscriberCountChanged`）。两源都收口主线程，故本方法恒在 main 执行。
      
      - Note: 启停需同时满足「授权就绪且在白名单」与「`locationPublisher` 有订阅者」——后者是本次修复核心：无人订阅则不空转持续定位（机制/策略分离）。
-     - Note: 白名单按平台区分（iOS `whenInUse`/`always`、macOS `always`），`#if os(...)` 区分、不引用对方平台 case；`startUpdatingLocation()`/`stopUpdatingLocation()` 幂等；方向更新经 `headingAvailable()` 判定。
+     - Note: 白名单按平台区分（iOS `whenInUse`/`always`、macOS `always`），`#if os(...)` 区分、不引用对方平台 case；`startUpdatingLocation()`/`stopUpdatingLocation()` 幂等。
+     - Note: 方向更新（heading）不再由本方法处理，已独立为 `updateHeadingUpdates()`，自己的订阅计数、自己的启停判断，与本方法完全分离（v1.7.0 起）。
      */
     private func updateContinuousUpdates() {
         let status = currentAuthorizationStatus
@@ -562,21 +537,91 @@ extension CoreLocationKit {
         
         if shouldRun {
             locationManager.startUpdatingLocation()
-#if os(iOS)
-            // heading 仅 iOS 可用；以 headingAvailable() 判定设备磁力计能力
-            if CLLocationManager.headingAvailable() {
-                locationManager.startUpdatingHeading()
-            }
-#endif
         } else {
             locationManager.stopUpdatingLocation()
-#if os(iOS)
-            if CLLocationManager.headingAvailable() {
-                locationManager.stopUpdatingHeading()
-            }
-#endif
         }
     }
+}
+
+
+// MARK: - CLLocationManagerDelegate 处理逻辑（internal，不再直接对外实现协议）
+
+extension CoreLocationKit {
+
+    /**
+     处理定位失败事件的实际逻辑。
+
+     - Note: 不再是协议见证方法——`CoreLocationKit` 本身不直接实现 `CLLocationManagerDelegate`（见 `LocationManagerDelegateProxy` 的说明），此方法由代理转发调用。`internal` 可见性确保外部调用方无法直接构造伪造回调注入数据，同时对本模块内的代理转发保持可达。
+     */
+    internal func handleDidFailWithError(_ error: Swift.Error) {
+        guard let clError = error as? CLError else {
+            print("⚠️ 定位失败：\(error.localizedDescription)")
+            return
+        }
+
+        switch clError.code {
+        case .locationUnknown:
+            print("位置暂时不可用，等待系统自动重试")
+        case .denied:
+            print("⚠️ 用户拒绝了位置权限")
+        case .network:
+            print("⚠️ 位置获取失败，可能是网络问题")
+        case .headingFailure:
+            print("⚠️ 方向数据不可用，可能是磁场干扰")
+        default:
+            print("⚠️ 定位发生未分类错误：\(clError.localizedDescription)")
+        }
+    }
+
+    /// 处理授权状态变化的实际逻辑，说明同上。
+    internal func handleDidChangeAuthorization(_ status: CLAuthorizationStatus) {
+        // 仅把最新授权状态送入 subject；持续更新的启停由 init 中订阅 subject 的响应式管线统一处理（归一/去重）。
+        authorizationStatusSubject.send(status)
+    }
+
+    /// 处理位置更新的实际逻辑，说明同上。
+    internal func handleDidUpdateLocations(_ locations: [CLLocation]) {
+        guard let lastLocation = locations.last else {
+            print("⚠️ `didUpdateLocations` 收到空位置数组，可能是 CoreLocation 异常行为")
+            return
+        }
+        print("✅ 成功获取位置: \(lastLocation.coordinate.latitude), \(lastLocation.coordinate.longitude)")
+        locationSubject.send(lastLocation)
+
+    }
+#if os(iOS)
+    /// 处理方向更新的实际逻辑，说明同上。
+    internal func handleDidUpdateHeading(_ newHeading: CLHeading) {
+        headingSubject.send(newHeading)
+    }
+    #endif
+}
+
+/**
+ `CLLocationManagerDelegate` 的私有代理转发器。
+
+ - Important: `CoreLocationKit` 本身不直接实现 `CLLocationManagerDelegate`——若直接实现，因 `CoreLocationKit` 是 `public` 类型、协议本身也是 `public`，Swift 编译期会强制要求见证方法的可见性不低于协议本身（即被迫全部 `public`），这正是这个代理类存在的原因：本类型本身是 `private`，其协议见证方法因而不受该约束，可以是隐式 `internal`；真正的处理逻辑保留在`CoreLocationKit` 的 `internal` 方法里（见上方 `handleDid...` 系列），代理只做一行转发。效果：外部调用方既拿不到可直接调用的 `public` delegate 方法，也拿不到这个代理类型本身（`private`），彻底堵死伪造回调注入数据的口子。
+ - Note: `owner` 用 `weak`，避免与 `CoreLocationKit`（持有本代理强引用）之间形成循环引用。
+ */
+private final class LocationManagerDelegateProxy: NSObject, CLLocationManagerDelegate {
+    weak var owner: CoreLocationKit?
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Swift.Error) {
+        owner?.handleDidFailWithError(error)
+    }
+
+    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        owner?.handleDidChangeAuthorization(status)
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        owner?.handleDidUpdateLocations(locations)
+    }
+#if os(iOS)
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        owner?.handleDidUpdateHeading(newHeading)
+    }
+    #endif
 }
 
 //MARK: - 类型定义
