@@ -119,11 +119,27 @@ final class CoreLocationKitTests: XCTestCase {
                       "timeout 的描述应体现「超时」语义")
     }
 
+    /**
+     geoEncodingFailed 带的关联 originalError，应被正确编入 errorDescription 文案中，
+     而不只是笼统提示——验证关联值真正被使用，不是摆设。
+     */
+    func testLocationError_geoEncodingFailed_includesOriginalErrorDescription() {
+        let originalError = NSError(
+            domain: "TestGeocodeDomain",
+            code: 42,
+            userInfo: [NSLocalizedDescriptionKey: "网络超时"]
+        )
+        let error = CoreLocationKit.LocationError.geoEncodingFailed(originalError: originalError)
+
+        XCTAssertTrue(error.errorDescription?.contains("网络超时") ?? false,
+                      "geoEncodingFailed 的描述应包含原始错误的具体信息，而非仅笼统提示")
+    }
+
     // MARK: - didUpdateLocations 数据流（主实例 delegate，mock 触发，不依赖真实定位）
 
     /**
      手动以 mock 位置触发 didUpdateLocations，验证 currentLocation 快照被更新。
-     不依赖真实定位——直接调用 public delegate 方法注入数据。
+     不依赖真实定位——直接调用 internal delegate 处理方法注入数据。
      */
     func testDidUpdateLocations_updatesCurrentLocationSnapshot() {
         let kit = CoreLocationKit.shared
