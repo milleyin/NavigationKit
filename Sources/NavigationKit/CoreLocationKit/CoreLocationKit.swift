@@ -206,60 +206,6 @@ public final class CoreLocationKit: NSObject, ObservableObject {
 //MARK: - 外部方法函数
 
 extension CoreLocationKit {
-    /**
-     提供基于当前位置的反向地理编码（地址解析）功能，并通过 `Publisher` 返回地址字符串。
-     
-     - Important: 该 `Publisher` 仅在 `currentLocation` 可用时执行，若 `currentLocation == nil`，则直接返回 `LocationError.locationUnavailable`。
-     - Attention: 反向地理编码是异步操作，调用 `addressPublisher` 不会立即返回地址，需要订阅 `Publisher` 以获取解析结果。
-     - Warning: `CLGeocoder` 在短时间内调用过多次可能会被系统限制，影响解析功能。
-     - Note: 返回的地址字符串格式如下：`街道, 门牌号, 城市, 省份, 邮政编码, 国家`。
-     
-     # 使用示例
-     ```swift
-     CoreLocationKit.shared.addressPublisher
-     .sink(receiveCompletion: { completion in
-     if case .failure(let error) = completion {
-     print("地址解析失败: \(error)")
-     }
-     }, receiveValue: { address in
-     print("当前位置地址: \(address)")
-     })
-     .store(in: &subscriptions)
-     ```
-     
-     - Returns: `AnyPublisher<String, Swift.Error>`，返回解析出的地址字符串，或错误。
-     - Throws: `LocationError.locationUnavailable` 若 `currentLocation` 不可用。
-     - Throws: `LocationError.geoEncodingFailed` 若 `CLGeocoder` 解析失败。
-     - Throws: `LocationError.noAddressFound` 若未能找到匹配的地址。
-     */
-    public var addressPublisher: AnyPublisher<String, Swift.Error> {
-        guard let location = currentLocation else {
-            return Fail(error: LocationError.locationUnavailable).eraseToAnyPublisher()
-        }
-        
-        return Future { promise in
-            CLGeocoder().reverseGeocodeLocation(location) { placemarks, error in
-                if let error = error {
-                    return promise(.failure(LocationError.geoEncodingFailed(originalError: error)))
-                }
-                guard let placemark = placemarks?.first else {
-                    return promise(.failure(LocationError.noAddressFound))
-                }
-                
-                let address = [
-                    placemark.thoroughfare,
-                    placemark.subThoroughfare,
-                    placemark.locality,
-                    placemark.administrativeArea,
-                    placemark.postalCode,
-                    placemark.country
-                ].compactMap { $0 }.joined(separator: ", ")
-                
-                promise(.success(address))
-            }
-        }
-        .eraseToAnyPublisher()
-    }
     
     /**
      请求一次当前位置。
@@ -373,6 +319,8 @@ extension CoreLocationKit {
     }
 }
 
+
+
 //MARK: - 前置条件校验
 extension CoreLocationKit {
     /**
@@ -422,6 +370,62 @@ extension CoreLocationKit {
         // 授权状态统一取自 subject（单一真相源），不再瞬时读实例属性——后者在启动空窗期会得到假 notDetermined。
         // subject 为 CLAuthorizationStatus（平台无关），故无需再按平台 #if 区分读取方式。
         return Self.validatePreconditions(servicesEnabled: CLLocationManager.locationServicesEnabled(), status: currentAuthorizationStatus)
+    }
+}
+
+//MARK: - 外部工具方法
+extension CoreLocationKit {
+    /**
+     反向地理编码：将坐标转换为候选地标列表。
+     
+     - Parameter location: 待反查的坐标，由调用方显式传入——不隐式依赖 `currentLocation`，可对任意坐标反查，不限于设备当前位置。
+     - Returns: 发出候选 `[CLPlacemark]`（保证至少一个元素）后完成的 publisher；查无结果或失败时发出错误。`CLPlacemark` 自带结构化地址字段（`thoroughfare`/`locality`/…）及坐标，取哪一个候选、如何格式化成可读文本，由调用方决定——SDK 不做预设。
+     - Warning: `CLGeocoder` 在短时间内调用过多次可能会被系统限制，影响解析功能。
+     - Note: 一次性操作，正确用法需 `.store(in:)` 持有返回的 `AnyCancellable`，否则订阅可能在结果返回前被提前释放、导致收不到回调（Combine `Future` 型一次性操作的通用注意事项，参见 `requestCurrentLocation` 的用法示例）。
+     - Example:
+     ```swift
+     CoreLocationKit.shared.reverseGeocode(someLocation)
+     .sink(receiveCompletion: { _ in }, receiveValue: { placemarks in
+     print(placemarks.first?.locality ?? "未知")
+     })
+     .store(in: &subscriptions)
+     ```
+     */
+    public func reverseGeocode(_ location: CLLocation) -> AnyPublisher<[CLPlacemark], Swift.Error> {
+        Future { promise in
+            CLGeocoder().reverseGeocodeLocation(location) { placemarks, error in
+                if let error = error {
+                    return promise(.failure(LocationError.geoEncodingFailed(originalError: error)))
+                }
+                guard let placemarks = placemarks, !placemarks.isEmpty else {
+                    return promise(.failure(LocationError.noAddressFound))
+                }
+                promise(.success(placemarks))
+            }
+        }
+        .eraseToAnyPublisher()
+    }
+    
+    /**
+     正向地理编码：将地址描述转换为候选地标列表。
+     
+     - Parameter addressString: 待查询的地址描述（如"台北101"、"1 Infinite Loop, Cupertino, CA"）。
+     - Returns: 发出候选 `[CLPlacemark]`（保证至少一个元素，每个候选可经 `.location` 取得坐标）后完成的 publisher；查无结果或失败时发出错误。一个地址字符串可能对应多个真实不同的候选（如地址重名），该信任系统默认排序、按距离筛选、还是交给用户选，是调用方的策略判断，SDK 不预设答案。
+     - Note: 一次性操作，用法注意事项同 `reverseGeocode(_:)`。
+     */
+    public func geocode(_ addressString: String) -> AnyPublisher<[CLPlacemark], Swift.Error> {
+        Future { promise in
+            CLGeocoder().geocodeAddressString(addressString) { placemarks, error in
+                if let error = error {
+                    return promise(.failure(LocationError.geoEncodingFailed(originalError: error)))
+                }
+                guard let placemarks = placemarks, !placemarks.isEmpty else {
+                    return promise(.failure(LocationError.noAddressFound))
+                }
+                promise(.success(placemarks))
+            }
+        }
+        .eraseToAnyPublisher()
     }
 }
 
