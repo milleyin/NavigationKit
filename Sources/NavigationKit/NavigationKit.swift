@@ -141,8 +141,9 @@ extension NavigationKit {
     public static func startDefaultSpeedPipeline() {
         guard isSpeedPipelineRunning == false else { return }
         isSpeedPipelineRunning = true
-
-        CoreLocationKit.shared.speedPublisher
+        
+        CoreLocationKit.shared.locationPublisher()
+            .compactMap { $0?.speed }
             .sink { rawSpeedMs in
                 speedManager.bindSpeedPublisher(
                     Just(rawSpeedMs).eraseToAnyPublisher()
