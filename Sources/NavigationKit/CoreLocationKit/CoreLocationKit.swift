@@ -69,6 +69,9 @@ public final class CoreLocationKit: NSObject, ObservableObject {
             .sink { [weak self] _ in
                 // 状态由方法内部读 currentAuthorizationStatus，不再传参
                 self?.updateContinuousUpdates()
+#if os(iOS)
+                self?.updateHeadingUpdates()
+#endif
             }
             .store(in: &subscriptions)
     }
@@ -629,18 +632,18 @@ extension CoreLocationKit {
         // 海拔（米）
         altitudeSubject.send(lastLocation.altitude)
     }
-
+#if os(iOS)
     /// 处理方向更新的实际逻辑，说明同上。
     internal func handleDidUpdateHeading(_ newHeading: CLHeading) {
         headingSubject.send(newHeading)
     }
+    #endif
 }
 
 /**
  `CLLocationManagerDelegate` 的私有代理转发器。
 
- - Important: `CoreLocationKit` 本身不直接实现 `CLLocationManagerDelegate`——若直接实现，因 `CoreLocationKit` 是 `public` 类型、协议本身也是 `public`，Swift 编译期会强制要求见证方法的可见性不低于协议本身（即被迫全部 `public`），这正是这个代理类存在的原因：本类型本身
-   是 `private`，其协议见证方法因而不受该约束，可以是隐式 `internal`；真正的处理逻辑保留在`CoreLocationKit` 的 `internal` 方法里（见上方 `handleDid...` 系列），代理只做一行转发。效果：外部调用方既拿不到可直接调用的 `public` delegate 方法，也拿不到这个代理类型本身（`private`），彻底堵死伪造回调注入数据的口子。
+ - Important: `CoreLocationKit` 本身不直接实现 `CLLocationManagerDelegate`——若直接实现，因 `CoreLocationKit` 是 `public` 类型、协议本身也是 `public`，Swift 编译期会强制要求见证方法的可见性不低于协议本身（即被迫全部 `public`），这正是这个代理类存在的原因：本类型本身是 `private`，其协议见证方法因而不受该约束，可以是隐式 `internal`；真正的处理逻辑保留在`CoreLocationKit` 的 `internal` 方法里（见上方 `handleDid...` 系列），代理只做一行转发。效果：外部调用方既拿不到可直接调用的 `public` delegate 方法，也拿不到这个代理类型本身（`private`），彻底堵死伪造回调注入数据的口子。
  - Note: `owner` 用 `weak`，避免与 `CoreLocationKit`（持有本代理强引用）之间形成循环引用。
  */
 private final class LocationManagerDelegateProxy: NSObject, CLLocationManagerDelegate {
@@ -657,10 +660,11 @@ private final class LocationManagerDelegateProxy: NSObject, CLLocationManagerDel
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         owner?.handleDidUpdateLocations(locations)
     }
-
+#if os(iOS)
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
         owner?.handleDidUpdateHeading(newHeading)
     }
+    #endif
 }
 
 //MARK: - 类型定义
