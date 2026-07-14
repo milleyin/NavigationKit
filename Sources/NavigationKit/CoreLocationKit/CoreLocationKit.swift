@@ -144,10 +144,26 @@ public final class CoreLocationKit: NSObject, ObservableObject {
         authorizationStatusSubject.value
     }
     
-    /// 方向数据发布者
-    public var headingPublisher: AnyPublisher<CLHeading?, Never> {
-        headingSubject.eraseToAnyPublisher()
+#if os(iOS)
+    /**
+     发布设备方向数据的 `Combine` 流（仅 iOS）。
+
+     - Important: 订阅此 publisher 即驱动方向更新——已授权前提下，有订阅者且设备支持磁力计（`CLLocationManager.headingAvailable()`）时启动 `startUpdatingHeading`，无订阅者则停止。独立于 `locationPublisher` 的订阅状态，互不连带（此前版本里订阅 `locationPublisher` 会隐式启动 heading，属越权耦合，这里已解耦）。
+     - Returns: `CLHeading?`，尚无方向数据时为 `nil`。
+     */
+    public func headingPublisher() -> AnyPublisher<CLHeading?, Never> {
+        headingSubject
+            .handleEvents(
+                receiveSubscription: { [weak self] _ in
+                    DispatchQueue.main.async { self?.headingSubscriberCountChanged(by: 1) }
+                },
+                receiveCancel: { [weak self] in
+                    DispatchQueue.main.async { self?.headingSubscriberCountChanged(by: -1) }
+                }
+            )
+            .eraseToAnyPublisher()
     }
+#endif
     
     /// 速度发布者（单位：m/s）
     public var speedPublisher: AnyPublisher<CLLocationSpeed, Never> {
@@ -196,6 +212,11 @@ public final class CoreLocationKit: NSObject, ObservableObject {
     private var subscriptions = Set<AnyCancellable>()
     /// 方向订阅对象
     private let headingSubject = CurrentValueSubject<CLHeading?, Never>(nil)
+#if os(iOS)
+    /// `headingPublisher` 当前活跃订阅者数（仅在主线程读写）。独立于 `locationSubscriberCount`，
+    /// 方向更新的启停自成一套，不再随持续定位的订阅状态被动连带。
+    private var headingSubscriberCount = 0
+#endif
     /// 速度订阅对象（m/s）
     private let speedSubject = CurrentValueSubject<CLLocationSpeed, Never>(0)
     /// 内部海拔订阅对象
@@ -497,6 +518,39 @@ extension CoreLocationKit {
         }
     }
     
+#if os(iOS)
+    /**
+     调整 `headingPublisher` 订阅者计数，并在「有无订阅者」跨 0 变化时重新评估方向更新启停。
+     
+     - Parameter delta: 增量（订阅 +1 / 取消 -1）。
+     - Important: 必须在主线程调用（由 `headingPublisher` 的 `handleEvents` 钩子派发主队列保证）。
+     - Note: 仅 0↔1 跨越时才触发 `updateHeadingUpdates()`，与 `locationSubscriberCountChanged` 同一模式。
+     */
+    private func headingSubscriberCountChanged(by delta: Int) {
+        let hadSubscribers = headingSubscriberCount > 0
+        headingSubscriberCount += delta
+        let hasSubscribers = headingSubscriberCount > 0
+        if hadSubscribers != hasSubscribers {
+            updateHeadingUpdates()
+        }
+    }
+    
+    /**
+     方向更新的独立启停入口，与 `updateContinuousUpdates`（位置）完全分离——heading 不再
+     依附 `locationSubscriberCount`，自己的订阅数说了算。
+     */
+    private func updateHeadingUpdates() {
+        let status = currentAuthorizationStatus
+        let authorized = (status == .authorizedWhenInUse || status == .authorizedAlways)
+        let shouldRun = authorized && headingSubscriberCount > 0 && CLLocationManager.headingAvailable()
+        if shouldRun {
+            locationManager.startUpdatingHeading()
+        } else {
+            locationManager.stopUpdatingHeading()
+        }
+    }
+#endif
+    
     /**
      持续定位 / 方向更新的单一启停入口，由两个事件源驱动重新评估：授权状态变化（`init` 的授权 sink）、`locationPublisher` 订阅数跨 0 变化（`locationSubscriberCountChanged`）。两源都收口主线程，故本方法恒在 main 执行。
      
@@ -515,22 +569,12 @@ extension CoreLocationKit {
         
         if shouldRun {
             locationManager.startUpdatingLocation()
-#if os(iOS)
-            // heading 仅 iOS 可用；以 headingAvailable() 判定设备磁力计能力
-            if CLLocationManager.headingAvailable() {
-                locationManager.startUpdatingHeading()
-            }
-#endif
         } else {
             locationManager.stopUpdatingLocation()
-#if os(iOS)
-            if CLLocationManager.headingAvailable() {
-                locationManager.stopUpdatingHeading()
-            }
-#endif
         }
     }
 }
+
 
 // MARK: - CLLocationManagerDelegate 处理逻辑（internal，不再直接对外实现协议）
 
