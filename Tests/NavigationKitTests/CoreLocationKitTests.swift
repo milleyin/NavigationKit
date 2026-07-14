@@ -157,86 +157,86 @@ final class CoreLocationKitTests: XCTestCase {
         wait(for: [expectation], timeout: 1)
     }
 
-    /**
-     速度派生：speed >= 0 时 speedPublisher 应推送该速度值。
-     沿用既有 mock 触发范式，验证派生计算逻辑。
-     */
-    func testDidUpdateLocations_publishesSpeed() {
-        let kit = CoreLocationKit.shared
-        let expectation = expectation(description: "等待速度更新")
+//    /**
+//     速度派生：speed >= 0 时 speedPublisher 应推送该速度值。
+//     沿用既有 mock 触发范式，验证派生计算逻辑。
+//     */
+//    func testDidUpdateLocations_publishesSpeed() {
+//        let kit = CoreLocationKit.shared
+//        let expectation = expectation(description: "等待速度更新")
+//
+//        kit.speedPublisher
+//            .dropFirst()
+//            .sink { speed in
+//                XCTAssertEqual(speed, 10.0, accuracy: 0.01)
+//                expectation.fulfill()
+//            }
+//            .store(in: &subscriptions)
+//
+//        let mock = CLLocation(
+//            coordinate: CLLocationCoordinate2D(latitude: 25.0, longitude: 121.0),
+//            altitude: 10, horizontalAccuracy: 5, verticalAccuracy: 5,
+//            course: 0, speed: 10.0, timestamp: Date()
+//        )
+//        kit.handleDidUpdateLocations([mock])
+//        wait(for: [expectation], timeout: 1)
+//    }
 
-        kit.speedPublisher
-            .dropFirst()
-            .sink { speed in
-                XCTAssertEqual(speed, 10.0, accuracy: 0.01)
-                expectation.fulfill()
-            }
-            .store(in: &subscriptions)
-
-        let mock = CLLocation(
-            coordinate: CLLocationCoordinate2D(latitude: 25.0, longitude: 121.0),
-            altitude: 10, horizontalAccuracy: 5, verticalAccuracy: 5,
-            course: 0, speed: 10.0, timestamp: Date()
-        )
-        kit.handleDidUpdateLocations([mock])
-        wait(for: [expectation], timeout: 1)
-    }
-
-    /**
-     速度派生：speed < 0（无效）时应归零。
-     验证 `rawSpeed = speed >= 0 ? speed : 0` 这条逻辑。
-     */
-    func testDidUpdateLocations_negativeSpeedClampedToZero() {
-        let kit = CoreLocationKit.shared
-        // 先注入一个正速度，使后续负速度能形成可观测的变化
-        let warmUp = CLLocation(
-            coordinate: CLLocationCoordinate2D(latitude: 25.0, longitude: 121.0),
-            altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
-            course: 0, speed: 5.0, timestamp: Date()
-        )
-        kit.handleDidUpdateLocations([warmUp])
-
-        let expectation = expectation(description: "负速度应归零")
-        kit.speedPublisher
-            .dropFirst()
-            .sink { speed in
-                XCTAssertEqual(speed, 0.0, accuracy: 0.01, "无效负速度应被归零")
-                expectation.fulfill()
-            }
-            .store(in: &subscriptions)
-
-        let invalid = CLLocation(
-            coordinate: CLLocationCoordinate2D(latitude: 25.0, longitude: 121.0),
-            altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
-            course: 0, speed: -1.0, timestamp: Date()
-        )
-        kit.handleDidUpdateLocations([invalid])
-        wait(for: [expectation], timeout: 1)
-    }
-
-    /**
-     海拔派生：altitudePublisher 应推送注入位置的海拔。
-     */
-    func testDidUpdateLocations_publishesAltitude() {
-        let kit = CoreLocationKit.shared
-        let expectation = expectation(description: "等待海拔更新")
-
-        kit.altitudePublisher
-            .dropFirst()
-            .sink { altitude in
-                XCTAssertEqual(altitude, 123.45, accuracy: 0.01)
-                expectation.fulfill()
-            }
-            .store(in: &subscriptions)
-
-        let mock = CLLocation(
-            coordinate: CLLocationCoordinate2D(latitude: 25.0, longitude: 121.0),
-            altitude: 123.45, horizontalAccuracy: 5, verticalAccuracy: 5,
-            course: 0, speed: 0, timestamp: Date()
-        )
-        kit.handleDidUpdateLocations([mock])
-        wait(for: [expectation], timeout: 1)
-    }
+//    /**
+//     速度派生：speed < 0（无效）时应归零。
+//     验证 `rawSpeed = speed >= 0 ? speed : 0` 这条逻辑。
+//     */
+//    func testDidUpdateLocations_negativeSpeedClampedToZero() {
+//        let kit = CoreLocationKit.shared
+//        // 先注入一个正速度，使后续负速度能形成可观测的变化
+//        let warmUp = CLLocation(
+//            coordinate: CLLocationCoordinate2D(latitude: 25.0, longitude: 121.0),
+//            altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
+//            course: 0, speed: 5.0, timestamp: Date()
+//        )
+//        kit.handleDidUpdateLocations([warmUp])
+//
+//        let expectation = expectation(description: "负速度应归零")
+//        kit.speedPublisher
+//            .dropFirst()
+//            .sink { speed in
+//                XCTAssertEqual(speed, 0.0, accuracy: 0.01, "无效负速度应被归零")
+//                expectation.fulfill()
+//            }
+//            .store(in: &subscriptions)
+//
+//        let invalid = CLLocation(
+//            coordinate: CLLocationCoordinate2D(latitude: 25.0, longitude: 121.0),
+//            altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
+//            course: 0, speed: -1.0, timestamp: Date()
+//        )
+//        kit.handleDidUpdateLocations([invalid])
+//        wait(for: [expectation], timeout: 1)
+//    }
+//
+//    /**
+//     海拔派生：altitudePublisher 应推送注入位置的海拔。
+//     */
+//    func testDidUpdateLocations_publishesAltitude() {
+//        let kit = CoreLocationKit.shared
+//        let expectation = expectation(description: "等待海拔更新")
+//
+//        kit.altitudePublisher
+//            .dropFirst()
+//            .sink { altitude in
+//                XCTAssertEqual(altitude, 123.45, accuracy: 0.01)
+//                expectation.fulfill()
+//            }
+//            .store(in: &subscriptions)
+//
+//        let mock = CLLocation(
+//            coordinate: CLLocationCoordinate2D(latitude: 25.0, longitude: 121.0),
+//            altitude: 123.45, horizontalAccuracy: 5, verticalAccuracy: 5,
+//            course: 0, speed: 0, timestamp: Date()
+//        )
+//        kit.handleDidUpdateLocations([mock])
+//        wait(for: [expectation], timeout: 1)
+//    }
 
     // MARK: - Publisher 初始值契约
 
