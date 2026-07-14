@@ -41,8 +41,8 @@ final class CoreLocationKitTests: XCTestCase {
     }
 
     /**
-         服务开启但已拒绝 / 受限（denied / restricted）时，应判定为 permissionDenied。
-         */
+     服务开启但已拒绝 / 受限（denied / restricted）时，应判定为 permissionDenied。
+     */
     func testValidatePreconditions_servicesEnabledButDeniedOrRestricted_returnsPermissionDenied() {
         let blocked: [CLAuthorizationStatus] = [.denied, .restricted]
         for status in blocked {
@@ -54,10 +54,10 @@ final class CoreLocationKitTests: XCTestCase {
         }
     }
 
-        /**
-         服务开启但授权尚未决定（notDetermined）时，应判定为 permissionNotDetermined，
-         而非 permissionDenied——「尚未决定」与「已拒绝」语义不同（方案 1.5）。
-         */
+    /**
+     服务开启但授权尚未决定（notDetermined）时，应判定为 permissionNotDetermined，
+     而非 permissionDenied——「尚未决定」与「已拒绝」语义不同（方案 1.5）。
+     */
     func testValidatePreconditions_servicesEnabledButNotDetermined_returnsNotDetermined() {
         let result = CoreLocationKit.validatePreconditions(servicesEnabled: true, status: .notDetermined)
         guard case .permissionNotDetermined = result else {
