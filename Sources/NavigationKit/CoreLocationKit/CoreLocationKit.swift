@@ -275,21 +275,12 @@ extension CoreLocationKit {
     }
     
     /**
-     设置是否允许后台位置更新。
+     配置是否允许应用在进入后台后继续接收位置更新（仅 iOS）。
      
-     - Important: 仅当应用拥有 **`authorizedAlways`** 权限时才可启用后台定位。若当前授权状态不是 `authorizedAlways`，则不会修改 `allowsBackgroundLocationUpdates`，并会打印警告信息。
-     - Attention: 启用后台定位可能会显著增加电量消耗，应仅在必要时使用。
-     - Warning: 若未在 `Info.plist` 添加 `UIBackgroundModes` -> `location`，即使设置 `allowsBackgroundLocationUpdates = true`，后台定位仍不会生效。
-     - Note:
-     - iOS 13+ 需要用户在系统设置中 **手动开启** `Always Allow`。
-     - 后台定位适用于 **步行导航、车辆跟踪、健身应用** 等场景。
-     
-     # 使用示例
-     ```swift
-     CoreLocationKit.shared.allowBackgroundLocationUpdates(true)
-     ```
-     
-     - parameter allowed: 是否允许后台定位，`true` 开启，`false` 关闭。
+     - Parameter allowed: `true` 允许后台持续定位，`false` 关闭（系统在应用进入后台时可能自动暂停更新）。
+     - Important: 生效前提有三：① 授权状态必须是 `.authorizedAlways`（`.authorizedWhenInUse` 不满足，系统本身不允许非 Always 授权的 App 后台定位）；② 平台必须是 iOS（macOS 无此概念，`#else`分支只打印提示，不做任何操作）；③系统级"后台应用刷新"（`UIApplication.backgroundRefreshStatus`）必须为 `.available`——用户可能在系统设置里关闭了这个开关，此时即便调用本方法也不会生效，只会打印诊断日志，不会抛错或崩溃。
+     - Note: 本设置与 `locationPublisher()` 的订阅状态相互独立，但**只有在实际有持续定位在跑时才有意义**——若调用本方法时 `locationPublisher()` 尚无订阅者（`locationSubscriberCount == 0`），持续定位本就没有运行，`allowsBackgroundLocationUpdates`/`pausesLocationUpdatesAutomatically`这两个底层属性虽然被正确设置，但不会有任何可观察的效果，需等到有订阅者、持续定位真正启动后才会体现。这不是 bug，只是设置生效的自然前提。
+     - Note: 这是一个可随时调整的运行期偏好（类似音量旋钮），不像 `locationPublisher(accuracy:distanceFilter:)`那样是"订阅时一次性声明、贯穿订阅期间"的静态参数，因此维持独立方法、不并入订阅参数列表。
      */
     public func allowBackgroundLocationUpdates(_ allowed: Bool) {
         
