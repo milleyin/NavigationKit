@@ -64,7 +64,7 @@ public final class CoreLocationKit: NSObject, ObservableObject {
         // 授权只是其中一个事件源，locationPublisher 订阅数跨 0 是另一个。
         authorizationStatusPublisher
             .removeDuplicates()
-        // 收口主线程，与订阅计数源统一，updateContinuousUpdates 恒在 main
+        // 收口主线程，与订阅计数源统一，updateContinuousUpdates 恒在 main, updateHeadingUpdates 同理
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 // 状态由方法内部读 currentAuthorizationStatus，不再传参
@@ -553,10 +553,11 @@ extension CoreLocationKit {
 #endif
     
     /**
-     持续定位 / 方向更新的单一启停入口，由两个事件源驱动重新评估：授权状态变化（`init` 的授权 sink）、`locationPublisher` 订阅数跨 0 变化（`locationSubscriberCountChanged`）。两源都收口主线程，故本方法恒在 main 执行。
+     持续定位的单一启停入口，由两个事件源驱动重新评估：授权状态变化（`init` 的授权 sink）、`locationPublisher` 订阅数跨 0 变化（`locationSubscriberCountChanged`）。两源都收口主线程，故本方法恒在 main 执行。
      
      - Note: 启停需同时满足「授权就绪且在白名单」与「`locationPublisher` 有订阅者」——后者是本次修复核心：无人订阅则不空转持续定位（机制/策略分离）。
-     - Note: 白名单按平台区分（iOS `whenInUse`/`always`、macOS `always`），`#if os(...)` 区分、不引用对方平台 case；`startUpdatingLocation()`/`stopUpdatingLocation()` 幂等；方向更新经 `headingAvailable()` 判定。
+     - Note: 白名单按平台区分（iOS `whenInUse`/`always`、macOS `always`），`#if os(...)` 区分、不引用对方平台 case；`startUpdatingLocation()`/`stopUpdatingLocation()` 幂等。
+     - Note: 方向更新（heading）不再由本方法处理，已独立为 `updateHeadingUpdates()`，自己的订阅计数、自己的启停判断，与本方法完全分离（v1.7.0 起）。
      */
     private func updateContinuousUpdates() {
         let status = currentAuthorizationStatus
